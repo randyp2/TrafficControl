@@ -12,7 +12,7 @@ func runCommand(args []string) error {
 
 	commandPath := args[0]
 
-	fmt.Printf("running scenario %s\n", commandPath)
+	fmt.Printf("running command %s\n", commandPath)
 
 	return nil
 
