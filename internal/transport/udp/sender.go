@@ -42,7 +42,7 @@ func Dial(target string) (*Sender, error) {
 func (s *Sender) Send(payload []byte) error {
 	n, err := s.conn.Write(payload)
 	if err != nil {
-		return fmt.Errorf("send UDP paylaod: %w", err)
+		return fmt.Errorf("send UDP payload: %w", err)
 	}
 
 	payload_n := len(payload)

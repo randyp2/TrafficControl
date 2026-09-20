@@ -1,0 +1,14 @@
+name: multi-udp
+
+streams:
+  - name: Telemetry
+    protocol: udp
+    target: 127.0.0.1:5000
+    rate: 2
+    payload: sup
+
+  - name: Backend
+    protocol: udp
+    target: 127.0.0.1:6000
+    rate: 5
+    payload: hello
