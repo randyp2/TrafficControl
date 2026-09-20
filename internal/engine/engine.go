@@ -9,6 +9,35 @@ import (
 	"github.com/randyp2/trafficcontrol/internal/transport/udp"
 )
 
+func Run(ctx context.Context, s scenario.Scenario) error {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	// Bidirectional channel to read and write results to
+	// Initialize with buffer size so writer threads don't block
+	results := make(chan error, len(s.Streams))
+
+	for _, stream := range s.Streams {
+		go func() {
+			results <- RunStream(ctx, stream)
+		}()
+	}
+
+	// Find first possible error, nil if none
+	var firstErr error
+	for range s.Streams {
+		// Pop first message off the channel/queue
+		err := <-results
+
+		if err != nil && firstErr == nil {
+			firstErr = err
+			cancel()
+		}
+	}
+
+	return firstErr
+}
+
 // RunStream is the engine that takes a context to manage lifecycle information
 // and a stream that contains stream specific configurations to determine
 // what payloads to send and when
@@ -40,12 +69,13 @@ func runUDPStream(ctx context.Context, stream scenario.Stream) error {
 
 	payload := []byte(stream.Payload)
 	for {
-		// Wait for messages to appear in channel
 		select {
 		case <-ctx.Done():
+			// Cancel method invoked
 			return nil
 
 		case <-ticker.C:
+			// Timed event occured
 			if err := sender.Send(payload); err != nil {
 				return fmt.Errorf("send stream %q: %w", stream.Name, err)
 			}

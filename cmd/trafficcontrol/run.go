@@ -31,7 +31,8 @@ func runCommand(args []string) error {
 		os.Interrupt,
 	)
 
-	defer stop() // Clean signal listener
+	// Clean signal listener
+	defer stop()
 
-	return engine.RunStream(ctx, s.Streams[0])
+	return engine.Run(ctx, s)
 }
