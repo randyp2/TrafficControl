@@ -15,7 +15,7 @@ import (
 func RunStream(ctx context.Context, stream scenario.Stream) error {
 	switch stream.Protocol {
 	case scenario.ProtocolUDP:
-		return nil
+		return runUDPStream(ctx, stream)
 	default:
 		return fmt.Errorf("unsupported protocol %q", stream.Protocol)
 	}
