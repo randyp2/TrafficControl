@@ -12,7 +12,7 @@ open connection.
 Handles writes out to other socket
 */
 
-// Sender hanldes the connected UDP client socket
+// Sender handles the connected UDP client socket
 type Sender struct {
 	conn *net.UDPConn
 }
