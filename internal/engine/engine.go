@@ -6,8 +6,16 @@ import (
 	"time"
 
 	"github.com/randyp2/trafficcontrol/internal/scenario"
+	"github.com/randyp2/trafficcontrol/internal/transport/tcp"
 	"github.com/randyp2/trafficcontrol/internal/transport/udp"
 )
+
+// *udp.Sender and *tcp.Sender satisfy this inteface implicitly
+// both implement Send([]byte) and Close()
+type sender interface {
+	Send([]byte) error
+	Close() error
+}
 
 func Run(ctx context.Context, s scenario.Scenario) error {
 	ctx, cancel := context.WithCancel(ctx)
@@ -23,10 +31,8 @@ func Run(ctx context.Context, s scenario.Scenario) error {
 		}()
 	}
 
-	// Find first possible error, nil if none
 	var firstErr error
 	for range s.Streams {
-		// Pop first message off the channel/queue
 		err := <-results
 
 		if err != nil && firstErr == nil {
@@ -38,22 +44,10 @@ func Run(ctx context.Context, s scenario.Scenario) error {
 	return firstErr
 }
 
-// RunStream is the engine that takes a context to manage lifecycle information
-// and a stream that contains stream specific configurations to determine
-// what payloads to send and when
+// RunStream utilizes the sender to send out bytes to the respective socket
+// based on timed events
 func RunStream(ctx context.Context, stream scenario.Stream) error {
-	switch stream.Protocol {
-	case scenario.ProtocolUDP:
-		return runUDPStream(ctx, stream)
-	default:
-		return fmt.Errorf("unsupported protocol %q", stream.Protocol)
-	}
-}
-
-// runUDPStream is an internal method that performs the actual action of
-// sending UDP packet based on a timer
-func runUDPStream(ctx context.Context, stream scenario.Stream) error {
-	sender, err := udp.Dial(stream.Target)
+	sender, err := newSender(stream)
 	if err != nil {
 		return err
 	}
@@ -80,5 +74,21 @@ func runUDPStream(ctx context.Context, stream scenario.Stream) error {
 				return fmt.Errorf("send stream %q: %w", stream.Name, err)
 			}
 		}
+	}
+}
+
+// newSender is internal method that creates the sender based on the stream
+// configuration
+func newSender(stream scenario.Stream) (sender, error) {
+	switch stream.Protocol {
+	case scenario.ProtocolUDP:
+		return udp.Dial(stream.Target)
+	case scenario.ProtocolTCP:
+		return tcp.Dial(stream.Target)
+	default:
+		return nil, fmt.Errorf(
+			"unsupported protocol %q",
+			stream.Protocol,
+		)
 	}
 }
