@@ -13,6 +13,11 @@ const (
 	ProtocolTCP Protocol = "tcp"
 )
 
+const (
+	ActionSetRate Action = "set_rate"
+	ActionStop    Action = "stop"
+)
+
 // Scenario describes the traffic scenario you are trying to simulate
 // Tag with backticks so yaml parser can map config file onto this struct
 type Scenario struct {

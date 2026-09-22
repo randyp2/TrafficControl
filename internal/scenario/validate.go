@@ -15,10 +15,20 @@ func (s Scenario) Validate() error {
 		return errors.New("at least one stream must be defined")
 	}
 
+	// Ensure unique stream names
+	streamNames := make(map[string]struct{}, len(s.Streams))
 	for i, stream := range s.Streams {
 		if err := stream.Validate(); err != nil {
-			return fmt.Errorf("stream %d: %w", i, err)
+			return fmt.Errorf("stream %d: %w\n", i, err)
 		}
+		if _, exists := streamNames[stream.Name]; exists {
+			return fmt.Errorf(
+				"stream name [%s] already used\n",
+				stream.Name,
+			)
+		}
+
+		streamNames[stream.Name] = struct{}{}
 	}
 
 	return nil
@@ -27,23 +37,45 @@ func (s Scenario) Validate() error {
 // Validate is a method reciever for Stream that validates config
 func (s Stream) Validate() error {
 	if s.Name == "" {
-		return errors.New("name for stream cannot be empty")
+		return errors.New("name for stream cannot be empty\n")
 	}
 
 	switch s.Protocol {
 	case ProtocolUDP:
-	case ProtocolHTTP:
 	case ProtocolTCP:
 	default:
-		return fmt.Errorf("unsupported protocol:%q", s.Protocol)
+		return fmt.Errorf("unsupported protocol:%q\n", s.Protocol)
 	}
 
 	if s.Target == "" {
-		return errors.New("target is required")
+		return errors.New("target is required\n")
 	}
 
 	if s.Rate <= 0 {
-		return errors.New("rate must be > 0")
+		return errors.New("rate must be > 0\n")
+	}
+
+	return nil
+}
+
+func (e Event) Validate() error {
+	if e.At < 0 {
+		return errors.New("event time cannot be negative\n")
+	}
+
+	if e.Stream == "" {
+		return errors.New("event stream name cannot be empty\n")
+	}
+
+	switch e.Action {
+	case ActionSetRate:
+		if e.Rate <= 0 {
+			return errors.New("event rate cannot be negative or non-zero\n")
+		}
+	case ActionStop:
+	default:
+		return fmt.Errorf("unsupported event action type: %q\n", e.Action)
+
 	}
 
 	return nil
