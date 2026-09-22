@@ -1,7 +1,9 @@
 package scenario
 
-// Protocol refers to the network protocol being used UDP | TCP | Http
+import "time"
+
 type Protocol string
+type Action string
 
 const (
 	// ProtocolUDP represents UDP traffic
@@ -9,9 +11,6 @@ const (
 
 	// ProtocolTCP represents TCP traffic
 	ProtocolTCP Protocol = "tcp"
-
-	// ProtocolHTTP represents http traffic
-	ProtocolHTTP Protocol = "http"
 )
 
 // Scenario describes the traffic scenario you are trying to simulate
@@ -19,6 +18,7 @@ const (
 type Scenario struct {
 	Name    string   `yaml:"name"`
 	Streams []Stream `yaml:"streams"`
+	Event   []Event  `yaml:"events"`
 }
 
 // Steram describes a configured source of generated network traffic
@@ -28,4 +28,11 @@ type Stream struct {
 	Target   string   `yaml:"target"`
 	Rate     int      `yaml:"rate"`
 	Payload  string   `yaml:"payload"`
+}
+
+type Event struct {
+	At     time.Duration `yaml:"at"`
+	Stream string        `yaml:"stream"`
+	Action Action        `yaml:"action"`
+	Rate   int           `yaml:"rate,omitempty"`
 }

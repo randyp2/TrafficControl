@@ -52,7 +52,7 @@ func RunStream(ctx context.Context, stream scenario.Stream) error {
 		return err
 	}
 
-	// Close UDP socket at the end of function lifecycle
+	// Close socket at the end of function lifecycle
 	defer sender.Close()
 
 	interval := time.Second / time.Duration(stream.Rate) // Time between packet sends
