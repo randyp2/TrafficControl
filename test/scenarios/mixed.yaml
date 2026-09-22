@@ -1,0 +1,14 @@
+name: mixed
+
+streams:
+  - name: Backend
+    protocol: udp
+    target: 127.0.0.1:5000
+    rate: 5
+    payload: sup
+
+  - name: Telemetry
+    protocol: tcp
+    target: 127.0.0.1:6000
+    rate: 2
+    payload: hellooo world
