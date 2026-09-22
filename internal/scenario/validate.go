@@ -15,13 +15,14 @@ func (s Scenario) Validate() error {
 		return errors.New("at least one stream must be defined")
 	}
 
-	// Ensure unique stream names
 	streamNames := make(map[string]struct{}, len(s.Streams))
 	for i, stream := range s.Streams {
 		if err := stream.Validate(); err != nil {
 			return fmt.Errorf("stream %d: %w\n", i, err)
 		}
+
 		if _, exists := streamNames[stream.Name]; exists {
+			// Ensure unique stream names
 			return fmt.Errorf(
 				"stream name [%s] already used\n",
 				stream.Name,
@@ -29,6 +30,19 @@ func (s Scenario) Validate() error {
 		}
 
 		streamNames[stream.Name] = struct{}{}
+	}
+
+	for i, event := range s.Event {
+		if err := event.Validate(); err != nil {
+			return fmt.Errorf("event %d: %w\n", i, err)
+		}
+
+		if _, exists := streamNames[event.Stream]; !exists {
+			return fmt.Errorf(
+				"event does not link with any stream: %s ",
+				event.Stream,
+			)
+		}
 	}
 
 	return nil
@@ -58,6 +72,7 @@ func (s Stream) Validate() error {
 	return nil
 }
 
+// Event is a method reciever for Event to validate singular event
 func (e Event) Validate() error {
 	if e.At < 0 {
 		return errors.New("event time cannot be negative\n")
@@ -70,7 +85,7 @@ func (e Event) Validate() error {
 	switch e.Action {
 	case ActionSetRate:
 		if e.Rate <= 0 {
-			return errors.New("event rate cannot be negative or non-zero\n")
+			return errors.New("event rate cannot be negative\n")
 		}
 	case ActionStop:
 	default:
