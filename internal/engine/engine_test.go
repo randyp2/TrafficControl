@@ -31,9 +31,10 @@ func TestRunStreamStopsOnContextCancel(t *testing.T) {
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
+	events := make(chan scenario.Event)
 	done := make(chan error, 1)
 	go func() {
-		done <- RunStream(ctx, stream)
+		done <- RunStream(ctx, stream, events)
 	}()
 
 	buffer := make([]byte, 1024)
