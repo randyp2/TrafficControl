@@ -23,7 +23,7 @@ const (
 type Scenario struct {
 	Name    string   `yaml:"name"`
 	Streams []Stream `yaml:"streams"`
-	Event   []Event  `yaml:"events"`
+	Events  []Event  `yaml:"events"`
 }
 
 // Steram describes a configured source of generated network traffic

@@ -32,7 +32,7 @@ func (s Scenario) Validate() error {
 		streamNames[stream.Name] = struct{}{}
 	}
 
-	for i, event := range s.Event {
+	for i, event := range s.Events {
 		if err := event.Validate(); err != nil {
 			return fmt.Errorf("event %d: %w\n", i, err)
 		}
