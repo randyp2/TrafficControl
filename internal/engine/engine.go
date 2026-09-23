@@ -2,6 +2,7 @@ package engine
 
 import (
 	"context"
+	"time"
 
 	"github.com/randyp2/trafficcontrol/internal/scenario"
 )
@@ -20,14 +21,23 @@ func Run(ctx context.Context, s scenario.Scenario) error {
 		len(s.Streams),
 	)
 
+	for range s.Streams {
+		eventChannels[s.Name] = make(
+			chan scenario.Event,
+			len(s.Events),
+		)
+	}
+
+	start := time.Now()
 	for _, stream := range s.Streams {
-		events := make(chan scenario.Event, len(s.Events))
-		eventChannels[stream.Name] = events
+		events := eventChannels[stream.Name]
 
 		go func() {
 			results <- RunStream(ctx, stream, events)
 		}()
 	}
+
+	go scheduleEvents(ctx, start, s.Events, eventChannels)
 
 	var firstErr error
 	for range s.Streams {
