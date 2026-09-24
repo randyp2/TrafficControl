@@ -26,7 +26,7 @@ func scheduleEvents(
 	for _, event := range scheduled {
 		// Calculate time between now and target time
 		timeLeft := time.Until(start.Add(event.At))
-		fmt.Printf("[SCHEDULER] Time is (%.2fs s)\n", timeLeft.Seconds())
+		fmt.Printf("[SCHEDULER] Seconds until event is (%.2fs s)\n", timeLeft.Seconds())
 
 		elapsed := time.Since(start)
 

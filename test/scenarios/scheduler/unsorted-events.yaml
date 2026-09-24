@@ -1,0 +1,24 @@
+name: unsorted-events
+
+streams:
+  - name: telemetry
+    protocol: udp
+    target: 127.0.0.1:5000
+    rate: 1
+    payload: telemetry
+
+# These events are intentionally not listed in chronological order.
+events:
+  - at: 6s
+    stream: telemetry
+    action: stop
+
+  - at: 4s
+    stream: telemetry
+    action: set_rate
+    rate: 2
+
+  - at: 2s
+    stream: telemetry
+    action: set_rate
+    rate: 8

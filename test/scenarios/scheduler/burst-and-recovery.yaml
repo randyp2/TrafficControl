@@ -1,0 +1,23 @@
+name: burst-and-recovery
+
+streams:
+  - name: telemetry
+    protocol: udp
+    target: 127.0.0.1:5000
+    rate: 2
+    payload: telemetry
+
+events:
+  - at: 2s
+    stream: telemetry
+    action: set_rate
+    rate: 25
+
+  - at: 5s
+    stream: telemetry
+    action: set_rate
+    rate: 2
+
+  - at: 8s
+    stream: telemetry
+    action: stop
