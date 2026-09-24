@@ -51,6 +51,12 @@ func RunStream(
 				return fmt.Errorf("send stream %q: %w", stream.Name, err)
 			}
 		case event := <-events:
+			fmt.Printf(
+				"[STREAM %s] received event %q\n",
+				stream.Name,
+				event.Action,
+			)
+
 			stop, err := handleEvent(ticker, event)
 			if err != nil {
 				return fmt.Errorf(
@@ -61,6 +67,7 @@ func RunStream(
 			}
 
 			if stop {
+				fmt.Printf("[STREAM %s] stopping\n", stream.Name)
 				return nil
 			}
 		}

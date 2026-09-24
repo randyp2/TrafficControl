@@ -1,0 +1,18 @@
+name: scheduler-test
+
+streams:
+  - name: telemetry
+    protocol: udp
+    target: 127.0.0.1:5000
+    rate: 2
+    payload: hello
+
+events:
+  - at: 5s
+    stream: telemetry
+    action: set_rate
+    rate: 10
+
+  - at: 10s
+    stream: telemetry
+    action: stop

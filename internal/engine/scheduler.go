@@ -2,6 +2,7 @@ package engine
 
 import (
 	"context"
+	"fmt"
 	"sort"
 	"time"
 
@@ -25,24 +26,58 @@ func scheduleEvents(
 	for _, event := range scheduled {
 		// Calculate time between now and target time
 		timeLeft := time.Until(start.Add(event.At))
+		fmt.Printf("[SCHEDULER] Time is (%.2fs s)\n", timeLeft.Seconds())
+
+		elapsed := time.Since(start)
+
+		fmt.Printf(
+			"[SCHEDULER] elapsed: %s | time left: %s\n",
+			elapsed.Truncate(time.Millisecond),
+			timeLeft.Truncate(time.Millisecond),
+		)
 
 		if timeLeft > 0 {
 			// Create non blocking timer
 			timer := time.NewTimer(timeLeft)
 
+			fmt.Printf(
+				"[SCHEDULER] waiting for event %q at %s\n",
+				event.Action,
+				event.At,
+			)
+
 			select {
 			case <-ctx.Done():
+				timer.Stop()
+				fmt.Printf("[SCHEDULER] context cancelled: %v\n", ctx.Err())
 				return nil
 			case <-timer.C:
+				fmt.Printf(
+					"[SCHEDULER] timer fired for %q at elapsed=%s\n",
+					event.Action,
+					time.Since(start).Truncate(time.Millisecond),
+				)
 			}
 		}
+
+		fmt.Printf(
+			"[SCHEDULER] sending %q to stream %q\n",
+			event.Action,
+			event.Stream,
+		)
 
 		// Time to send event
 		select {
 		case <-ctx.Done():
+			fmt.Printf("[SCHEDULER] cancelled before event send\n")
 			return nil
 		case eventChannels[event.Stream] <- event:
 			// Write to the respective event channel when the recieving end is ready to read
+			fmt.Printf(
+				"[SCHEDULER] sent %q to stream %q\n",
+				event.Action,
+				event.Stream,
+			)
 		}
 
 	}

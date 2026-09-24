@@ -4,5 +4,5 @@ streams:
   - name: Telemetry
     protocol: udp
     target: 127.0.0.1:5000
-    rate: 2
+    rate: 10
     payload: sup

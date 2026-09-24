@@ -21,8 +21,8 @@ func Run(ctx context.Context, s scenario.Scenario) error {
 		len(s.Streams),
 	)
 
-	for range s.Streams {
-		eventChannels[s.Name] = make(
+	for _, stream := range s.Streams {
+		eventChannels[stream.Name] = make(
 			chan scenario.Event,
 			len(s.Events),
 		)
