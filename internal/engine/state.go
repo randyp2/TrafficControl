@@ -1,4 +1,4 @@
-package scenario
+package engine
 
 type streamStatus uint8
 
@@ -9,5 +9,5 @@ const (
 
 type streamState struct {
 	targetRate int
-	status     bool
+	status     streamStatus
 }

@@ -38,6 +38,11 @@ func RunStream(
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
+	state := streamState{
+		targetRate: stream.Rate,
+		status:     streamRunning,
+	}
+
 	payload := []byte(stream.Payload)
 	for {
 		select {
@@ -57,7 +62,7 @@ func RunStream(
 				event.Action,
 			)
 
-			stop, err := handleEvent(ticker, event)
+			stop, err := handleEvent(ticker, event, &state)
 			if err != nil {
 				return fmt.Errorf(
 					"handle event for stream %q: %w",

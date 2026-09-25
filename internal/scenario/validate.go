@@ -3,6 +3,7 @@ package scenario
 import (
 	"errors"
 	"fmt"
+	"time"
 )
 
 // Validate is a method reciever that ensures the given scenario is "valid"
@@ -87,7 +88,19 @@ func (e Event) Validate() error {
 		if e.Rate <= 0 {
 			return errors.New("event rate cannot be negative\n")
 		}
-	case ActionStop:
+
+		interval := time.Second / time.Duration(e.Rate)
+		if interval <= 0 {
+			return fmt.Errorf("event rate %d is too high\n", e.Rate)
+		}
+
+	case ActionPause, ActionResume, ActionStop:
+		if e.Rate != 0 {
+			return fmt.Errorf(
+				"event action %q does not accept a rate",
+				e.Action,
+			)
+		}
 	default:
 		return fmt.Errorf("unsupported event action type: %q\n", e.Action)
 
