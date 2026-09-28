@@ -86,7 +86,7 @@ func (e Event) Validate() error {
 	switch e.Action {
 	case ActionSetRate:
 		if e.Rate <= 0 {
-			return errors.New("event rate cannot be negative\n")
+			return errors.New("event rate must be > 0\n")
 		}
 
 		interval := time.Second / time.Duration(e.Rate)

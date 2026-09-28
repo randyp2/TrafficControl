@@ -28,7 +28,7 @@ func handleEvent(
 		if interval <= 0 {
 			return false, fmt.Errorf(
 				"rate %d is too high",
-				state.targetRate,
+				event.Rate,
 			)
 		}
 		state.targetRate = event.Rate
