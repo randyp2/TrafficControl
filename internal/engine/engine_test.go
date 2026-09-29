@@ -105,7 +105,7 @@ func TestRunMultipleStreams(t *testing.T) {
 	done := make(chan error, 1)
 
 	go func() {
-		done <- Run(ctx, s)
+		done <- Run(ctx, s, nil)
 	}()
 
 	// --- Test listener1

@@ -98,7 +98,7 @@ func TestRunDeliversScheduledStop(t *testing.T) {
 
 	done := make(chan error, 1)
 	go func() {
-		done <- Run(ctx, s)
+		done <- Run(ctx, s, nil)
 	}()
 
 	select {

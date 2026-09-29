@@ -39,10 +39,16 @@ func RunStream(
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
+	// Report update
+	now := time.Now()
 	state := streamState{
 		targetRate: stream.Rate,
 		status:     streamRunning,
+
+		startedAt: now,
+		updatedAt: now,
 	}
+	emitUpdate(reporter, UpdateStarted, state.snapshot(stream.Name))
 
 	payload := []byte(stream.Payload)
 	for {
