@@ -23,6 +23,7 @@ func RunStream(
 	ctx context.Context,
 	stream scenario.Stream,
 	events <-chan scenario.Event,
+	reporter Reporter,
 ) error {
 	sender, err := newSender(stream)
 	if err != nil {

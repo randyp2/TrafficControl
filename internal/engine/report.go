@@ -22,7 +22,7 @@ const (
 	UpdateSnapshot    UpdateKind = "snapshot"
 	UpdateRateChanged UpdateKind = "rate_changed"
 	UpdatePaused      UpdateKind = "paused"
-	UpdateResume      UpdateKind = "resume"
+	UpdateResume      UpdateKind = "resumed"
 	UpdateStopped     UpdateKind = "stopped"
 	UpdateCanceled    UpdateKind = "canceled"
 	UpdateFailed      UpdateKind = "failed"
@@ -37,7 +37,7 @@ type StreamSnapshot struct {
 	BytesSent   uint64
 	StartedAt   time.Time
 	UpdatedAt   time.Time
-	LastErorr   string
+	LastError   string
 }
 
 // StreamUpdate contains snapshot and why its emitted
@@ -46,11 +46,13 @@ type StreamUpdate struct {
 	Snapshot StreamSnapshot
 }
 
+// Reporter receives the runtime updates
 type Reporter interface {
 	Report(StreamUpdate)
 }
 
 func emitUpdate(reporter Reporter, kind UpdateKind, snapshot StreamSnapshot) {
+	// Reporter is disabled do nothing
 	if reporter == nil {
 		return
 	}

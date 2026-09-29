@@ -34,5 +34,5 @@ func runCommand(args []string) error {
 	// Clean signal listener
 	defer stop()
 
-	return engine.Run(ctx, s)
+	return engine.Run(ctx, s, nil)
 }

@@ -32,7 +32,7 @@ func (s streamState) snapshot(name string) StreamSnapshot {
 		BytesSent:   s.bytesSent,
 		StartedAt:   s.startedAt,
 		UpdatedAt:   s.updatedAt,
-		LastErorr:   s.lastError,
+		LastError:   s.lastError,
 	}
 }
 

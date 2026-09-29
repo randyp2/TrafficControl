@@ -7,7 +7,11 @@ import (
 	"github.com/randyp2/trafficcontrol/internal/scenario"
 )
 
-func Run(ctx context.Context, s scenario.Scenario) error {
+func Run(
+	ctx context.Context,
+	s scenario.Scenario,
+	reporter Reporter,
+) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
@@ -32,9 +36,17 @@ func Run(ctx context.Context, s scenario.Scenario) error {
 	for _, stream := range s.Streams {
 		events := eventChannels[stream.Name]
 
-		go func() {
-			results <- RunStream(ctx, stream, events)
-		}()
+		go func(
+			stream scenario.Stream,
+			events <-chan scenario.Event,
+		) {
+			results <- RunStream(
+				ctx,
+				stream,
+				events,
+				reporter,
+			)
+		}(stream, events)
 	}
 
 	go scheduleEvents(ctx, start, s.Events, eventChannels)

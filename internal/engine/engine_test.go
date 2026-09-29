@@ -34,7 +34,7 @@ func TestRunStreamStopsOnContextCancel(t *testing.T) {
 	events := make(chan scenario.Event)
 	done := make(chan error, 1)
 	go func() {
-		done <- RunStream(ctx, stream, events)
+		done <- RunStream(ctx, stream, events, nil)
 	}()
 
 	buffer := make([]byte, 1024)
@@ -170,7 +170,7 @@ func TestRunStreamPausesChangesRateAndResumes(t *testing.T) {
 	events := make(chan scenario.Event, 4)
 	done := make(chan error, 1)
 	go func() {
-		done <- RunStream(ctx, stream, events)
+		done <- RunStream(ctx, stream, events, nil)
 	}()
 
 	waitForUDPPacket(t, listener, 2*time.Second)
