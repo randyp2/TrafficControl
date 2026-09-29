@@ -7,7 +7,7 @@ import (
 )
 
 func TestExampleScenarioFilesLoadAndValidate(t *testing.T) {
-	root := filepath.Join("..", "..", "test", "scenarios")
+	root := filepath.Join("..", "..", "examples", "scenarios")
 	fileCount := 0
 
 	err := filepath.WalkDir(root, func(path string, entry fs.DirEntry, walkErr error) error {
