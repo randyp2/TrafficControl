@@ -10,6 +10,8 @@ import (
 	"github.com/randyp2/trafficcontrol/internal/transport/udp"
 )
 
+const snapshotInterval = time.Second
+
 // *udp.Sender and *tcp.Sender satisfy this inteface implicitly
 // both implement Send([]byte) and Close()
 type sender interface {
@@ -36,8 +38,8 @@ func RunStream(
 	interval := time.Second / time.Duration(stream.Rate) // Time between packet sends
 
 	// Send timed events to ticker.C channel
-	ticker := time.NewTicker(interval)
-	defer ticker.Stop()
+	sendTicker := time.NewTicker(interval)
+	defer sendTicker.Stop()
 
 	// Report update
 	now := time.Now()
@@ -50,6 +52,15 @@ func RunStream(
 	}
 	emitUpdate(reporter, UpdateStarted, state.snapshot(stream.Name))
 
+	var snapshotTicker *time.Ticker
+	var snapshotC <-chan time.Time
+
+	if reporter != nil {
+		snapshotTicker = time.NewTicker(snapshotInterval)
+		snapshotC = snapshotTicker.C
+		defer snapshotTicker.Stop()
+	}
+
 	payload := []byte(stream.Payload)
 	for {
 		select {
@@ -57,19 +68,30 @@ func RunStream(
 			// Cancel method invoked
 			return nil
 
-		case <-ticker.C:
+		case <-sendTicker.C:
 			// Timed event occured
 			if err := sender.Send(payload); err != nil {
 				return fmt.Errorf("send stream %q: %w", stream.Name, err)
 			}
+
+			// Update counters
+			state.packetsSent++
+			state.bytesSent += uint64(len(payload))
+			state.updatedAt = time.Now()
+
+		case <-snapshotC:
+			// Emit snapshot update
+			emitUpdate(reporter, UpdateSnapshot, state.snapshot(stream.Name))
+
 		case event := <-events:
+			// Scheduled events
 			fmt.Printf(
 				"[STREAM %s] received event %q\n",
 				stream.Name,
 				event.Action,
 			)
 
-			stop, err := handleEvent(ticker, event, &state)
+			stop, err := handleEvent(sendTicker, event, &state)
 			if err != nil {
 				return fmt.Errorf(
 					"handle event for stream %q: %w",
