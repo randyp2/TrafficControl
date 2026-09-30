@@ -66,12 +66,19 @@ func RunStream(
 		select {
 		case <-ctx.Done():
 			// Cancel method invoked
+
+			state.status = streamStopped
+			state.updatedAt = time.Now()
+
+			emitUpdate(reporter, UpdateCanceled, state.snapshot(stream.Name))
+
 			return nil
 
 		case <-sendTicker.C:
 			// Timed event occured
 			if err := sender.Send(payload); err != nil {
-				return fmt.Errorf("send stream %q: %w", stream.Name, err)
+				sendErr := fmt.Errorf("send stream %q: %w", stream.Name, err)
+				return failStream(&state, reporter, stream.Name, sendErr)
 			}
 
 			// Update counters
@@ -96,11 +103,13 @@ func RunStream(
 
 			stop, err := handleEvent(sendTicker, event, &state)
 			if err != nil {
-				return fmt.Errorf(
+				eventErr := fmt.Errorf(
 					"handle event for stream %q: %w",
 					stream.Name,
 					err,
 				)
+
+				return failStream(&state, reporter, stream.Name, eventErr)
 			}
 
 			currentState := state.status
@@ -153,4 +162,19 @@ func newSender(stream scenario.Stream) (sender, error) {
 			stream.Protocol,
 		)
 	}
+}
+
+func failStream(
+	state *streamState,
+	reporter Reporter,
+	streamName string,
+	err error,
+) error {
+	state.status = streamFailed
+	state.updatedAt = time.Now()
+	state.lastError = err.Error()
+
+	emitUpdate(reporter, UpdateFailed, state.snapshot(streamName))
+
+	return err
 }

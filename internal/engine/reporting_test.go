@@ -3,6 +3,7 @@ package engine
 import (
 	"context"
 	"net"
+	"strings"
 	"testing"
 	"time"
 
@@ -363,5 +364,134 @@ func TestRunStreamReportsEventTransitions(t *testing.T) {
 		}
 	case <-time.After(time.Second):
 		t.Fatal("RunStream did not stop after stop event")
+	}
+}
+
+func TestRunStreamReportsCancellation(t *testing.T) {
+	addr, err := net.ResolveUDPAddr("udp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	listener, err := net.ListenUDP("udp", addr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer listener.Close()
+
+	stream := scenario.Stream{
+		Name:     "telemetry",
+		Protocol: scenario.ProtocolUDP,
+		Target:   listener.LocalAddr().String(),
+		Rate:     10,
+		Payload:  "hello",
+	}
+
+	reporter := &channelReporter{
+		updates: make(chan StreamUpdate, 4),
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	done := make(chan error, 1)
+	go func() {
+		done <- RunStream(
+			ctx,
+			stream,
+			make(chan scenario.Event),
+			reporter,
+		)
+	}()
+
+	started := waitForUpdate(t, reporter.updates, UpdateStarted)
+	cancel()
+
+	canceled := waitForUpdate(t, reporter.updates, UpdateCanceled)
+	if canceled.Snapshot.Status != StreamStatusStopped {
+		t.Fatalf(
+			"canceled status = %q, want %q",
+			canceled.Snapshot.Status,
+			StreamStatusStopped,
+		)
+	}
+	if canceled.Snapshot.UpdatedAt.Before(started.Snapshot.UpdatedAt) {
+		t.Fatal("canceled update time is before started update time")
+	}
+
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("RunStream returned error: %v", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("RunStream did not stop after cancellation")
+	}
+}
+
+func TestRunStreamReportsFailure(t *testing.T) {
+	addr, err := net.ResolveUDPAddr("udp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	listener, err := net.ListenUDP("udp", addr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer listener.Close()
+
+	stream := scenario.Stream{
+		Name:     "telemetry",
+		Protocol: scenario.ProtocolUDP,
+		Target:   listener.LocalAddr().String(),
+		Rate:     10,
+		Payload:  "hello",
+	}
+
+	reporter := &channelReporter{
+		updates: make(chan StreamUpdate, 4),
+	}
+	events := make(chan scenario.Event, 1)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	done := make(chan error, 1)
+	go func() {
+		done <- RunStream(ctx, stream, events, reporter)
+	}()
+
+	waitForUpdate(t, reporter.updates, UpdateStarted)
+
+	events <- scenario.Event{
+		Action: scenario.Action("unknown"),
+	}
+
+	failed := waitForUpdate(t, reporter.updates, UpdateFailed)
+	if failed.Snapshot.Status != StreamStatusFailed {
+		t.Fatalf(
+			"failed status = %q, want %q",
+			failed.Snapshot.Status,
+			StreamStatusFailed,
+		)
+	}
+	if !strings.Contains(failed.Snapshot.LastError, "unknown event action") {
+		t.Fatalf(
+			"last error = %q, want unknown event action error",
+			failed.Snapshot.LastError,
+		)
+	}
+
+	select {
+	case err := <-done:
+		if err == nil {
+			t.Fatal("RunStream returned nil error after failed event")
+		}
+		if !strings.Contains(err.Error(), "unknown event action") {
+			t.Fatalf("RunStream error = %q, want unknown event action error", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("RunStream did not return after failed event")
 	}
 }
