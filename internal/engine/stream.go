@@ -91,6 +91,9 @@ func RunStream(
 				event.Action,
 			)
 
+			previousState := state.status
+			previousRate := state.targetRate
+
 			stop, err := handleEvent(sendTicker, event, &state)
 			if err != nil {
 				return fmt.Errorf(
@@ -100,9 +103,37 @@ func RunStream(
 				)
 			}
 
+			currentState := state.status
+			currentRate := state.targetRate
+			eventTime := time.Now()
+
 			if stop {
+				state.status = streamStopped
+				state.updatedAt = eventTime
+
+				emitUpdate(reporter, UpdateStopped, state.snapshot(stream.Name))
+
 				fmt.Printf("[STREAM %s] stopping\n", stream.Name)
 				return nil
+			}
+
+			// Changed the current stream state
+			if previousState != currentState {
+				state.updatedAt = eventTime
+
+				switch state.status {
+				case streamRunning:
+					emitUpdate(reporter, UpdateResumed, state.snapshot(stream.Name))
+				case streamPaused:
+					emitUpdate(reporter, UpdatePaused, state.snapshot(stream.Name))
+				}
+			}
+
+			// Changed packet send rate
+			if previousRate != currentRate {
+				state.updatedAt = eventTime
+
+				emitUpdate(reporter, UpdateRateChanged, state.snapshot(stream.Name))
 			}
 		}
 	}

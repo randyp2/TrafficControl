@@ -22,7 +22,7 @@ const (
 	UpdateSnapshot    UpdateKind = "snapshot"
 	UpdateRateChanged UpdateKind = "rate_changed"
 	UpdatePaused      UpdateKind = "paused"
-	UpdateResume      UpdateKind = "resumed"
+	UpdateResumed     UpdateKind = "resumed"
 	UpdateStopped     UpdateKind = "stopped"
 	UpdateCanceled    UpdateKind = "canceled"
 	UpdateFailed      UpdateKind = "failed"
