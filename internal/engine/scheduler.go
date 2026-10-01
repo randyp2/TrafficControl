@@ -36,6 +36,7 @@ func scheduleEvents(
 			timeLeft.Truncate(time.Millisecond),
 		)
 
+		// Time left before executing event
 		if timeLeft > 0 {
 			// Create non blocking timer
 			timer := time.NewTimer(timeLeft)
@@ -51,6 +52,7 @@ func scheduleEvents(
 				timer.Stop()
 				fmt.Printf("[SCHEDULER] context cancelled: %v\n", ctx.Err())
 				return nil
+
 			case <-timer.C:
 				fmt.Printf(
 					"[SCHEDULER] timer fired for %q at elapsed=%s\n",
@@ -69,8 +71,9 @@ func scheduleEvents(
 		// Time to send event
 		select {
 		case <-ctx.Done():
-			fmt.Printf("[SCHEDULER] cancelled before event send\n")
+			fmt.Printf("[SCHEDULER] canceled before event send\n")
 			return nil
+
 		case eventChannels[event.Stream] <- event:
 			// Write to the respective event channel when the recieving end is ready to read
 			fmt.Printf(
