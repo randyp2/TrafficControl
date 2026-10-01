@@ -25,47 +25,47 @@ func TestConsoleReporterFormatsUpdates(t *testing.T) {
 		{
 			name: "started",
 			kind: engine.UpdateStarted,
-			want: "[telemetry] started rate=25 pkt/s\n",
+			want: "[STARTED: telemetry] rate=25 pkt/s\n",
 		},
 		{
 			name: "snapshot",
 			kind: engine.UpdateSnapshot,
-			want: "[telemetry] status=running rate=25 pkt/s packets=10 bytes=50\n",
+			want: "[SNAPSHOT: telemetry] status=running rate=25 pkt/s packets=10 bytes=50\n",
 		},
 		{
 			name: "rate changed",
 			kind: engine.UpdateRateChanged,
-			want: "[telemetry] rate changed rate=25 pkt/s status=running\n",
+			want: "[RATE_CHANGED: telemetry] rate=25 pkt/s status=running\n",
 		},
 		{
 			name: "paused",
 			kind: engine.UpdatePaused,
-			want: "[telemetry] paused packets=10 bytes=50\n",
+			want: "[PAUSED: telemetry] packets=10 bytes=50\n",
 		},
 		{
 			name: "resumed",
 			kind: engine.UpdateResumed,
-			want: "[telemetry] resumed rate=25 pkt/s\n",
+			want: "[RESUMED: telemetry] rate=25 pkt/s\n",
 		},
 		{
 			name: "stopped",
 			kind: engine.UpdateStopped,
-			want: "[telemetry] stopped packets=10 bytes=50\n",
+			want: "[STOPPED: telemetry] packets=10 bytes=50\n",
 		},
 		{
 			name: "canceled",
 			kind: engine.UpdateCanceled,
-			want: "[telemetry] canceled packets=10 bytes=50\n",
+			want: "[CANCELED: telemetry] packets=10 bytes=50\n",
 		},
 		{
 			name: "failed",
 			kind: engine.UpdateFailed,
-			want: "[telemetry] failed error=\"send failed\" packets=10 bytes=50\n",
+			want: "[FAILED: telemetry] error=\"send failed\" packets=10 bytes=50\n",
 		},
 		{
 			name: "unknown",
 			kind: engine.UpdateKind("unknown"),
-			want: "[telemetry] update=unknown status=running\n",
+			want: "[UNKNOWN: telemetry] status=running\n",
 		},
 	}
 

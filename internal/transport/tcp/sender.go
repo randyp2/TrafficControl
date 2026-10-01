@@ -27,7 +27,8 @@ func Dial(target string) (*Sender, error) {
 	}, nil
 }
 
-// Send writes raw byte payload to the remote connection
+// Send writes raw byte payload to the remote connection. This informs us
+// whether the data was sent NOT RECIEVED
 func (s *Sender) Send(payload []byte) error {
 	n, err := s.conn.Write(payload)
 	if err != nil {

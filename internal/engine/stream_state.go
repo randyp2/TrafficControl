@@ -23,7 +23,7 @@ type streamState struct {
 	lastError string
 }
 
-func (s streamState) snapshot(name string) StreamSnapshot {
+func (s streamState) snapshot(name string, capturedAt time.Time) StreamSnapshot {
 	return StreamSnapshot{
 		Name:        name,
 		Status:      getStreamStatus(s.status),
@@ -32,6 +32,7 @@ func (s streamState) snapshot(name string) StreamSnapshot {
 		BytesSent:   s.bytesSent,
 		StartedAt:   s.startedAt,
 		UpdatedAt:   s.updatedAt,
+		CapturedAt:  capturedAt,
 		LastError:   s.lastError,
 	}
 }

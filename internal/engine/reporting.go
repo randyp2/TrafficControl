@@ -37,6 +37,7 @@ type StreamSnapshot struct {
 	BytesSent   uint64
 	StartedAt   time.Time
 	UpdatedAt   time.Time
+	CapturedAt  time.Time
 	LastError   string
 }
 

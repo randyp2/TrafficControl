@@ -50,7 +50,7 @@ func RunStream(
 		startedAt: now,
 		updatedAt: now,
 	}
-	emitUpdate(reporter, UpdateStarted, state.snapshot(stream.Name))
+	emitUpdate(reporter, UpdateStarted, state.snapshot(stream.Name, now))
 
 	var snapshotTicker *time.Ticker
 	var snapshotC <-chan time.Time
@@ -67,10 +67,11 @@ func RunStream(
 		case <-ctx.Done():
 			// Cancel method invoked
 
+			canceledAt := time.Now()
 			state.status = streamStopped
-			state.updatedAt = time.Now()
+			state.updatedAt = canceledAt
 
-			emitUpdate(reporter, UpdateCanceled, state.snapshot(stream.Name))
+			emitUpdate(reporter, UpdateCanceled, state.snapshot(stream.Name, canceledAt))
 
 			return nil
 
@@ -87,16 +88,13 @@ func RunStream(
 			state.updatedAt = time.Now()
 
 		case <-snapshotC:
+			capturedAt := time.Now()
+
 			// Emit snapshot update
-			emitUpdate(reporter, UpdateSnapshot, state.snapshot(stream.Name))
+			emitUpdate(reporter, UpdateSnapshot, state.snapshot(stream.Name, capturedAt))
 
 		case event := <-events:
 			// Scheduled events
-			fmt.Printf(
-				"[STREAM %s] received event %q\n",
-				stream.Name,
-				event.Action,
-			)
 
 			previousState := state.status
 			previousRate := state.targetRate
@@ -120,9 +118,8 @@ func RunStream(
 				state.status = streamStopped
 				state.updatedAt = eventTime
 
-				emitUpdate(reporter, UpdateStopped, state.snapshot(stream.Name))
+				emitUpdate(reporter, UpdateStopped, state.snapshot(stream.Name, eventTime))
 
-				fmt.Printf("[STREAM %s] stopping\n", stream.Name)
 				return nil
 			}
 
@@ -132,9 +129,9 @@ func RunStream(
 
 				switch state.status {
 				case streamRunning:
-					emitUpdate(reporter, UpdateResumed, state.snapshot(stream.Name))
+					emitUpdate(reporter, UpdateResumed, state.snapshot(stream.Name, eventTime))
 				case streamPaused:
-					emitUpdate(reporter, UpdatePaused, state.snapshot(stream.Name))
+					emitUpdate(reporter, UpdatePaused, state.snapshot(stream.Name, eventTime))
 				}
 			}
 
@@ -142,7 +139,7 @@ func RunStream(
 			if previousRate != currentRate {
 				state.updatedAt = eventTime
 
-				emitUpdate(reporter, UpdateRateChanged, state.snapshot(stream.Name))
+				emitUpdate(reporter, UpdateRateChanged, state.snapshot(stream.Name, eventTime))
 			}
 		}
 	}
@@ -170,11 +167,13 @@ func failStream(
 	streamName string,
 	err error,
 ) error {
+	failedAt := time.Now()
+
 	state.status = streamFailed
-	state.updatedAt = time.Now()
+	state.updatedAt = failedAt
 	state.lastError = err.Error()
 
-	emitUpdate(reporter, UpdateFailed, state.snapshot(streamName))
+	emitUpdate(reporter, UpdateFailed, state.snapshot(streamName, failedAt))
 
 	return err
 }

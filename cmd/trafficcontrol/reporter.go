@@ -3,20 +3,30 @@ package main
 import (
 	"fmt"
 	"io"
+	"strings"
 	"sync"
+	"time"
 
 	"github.com/randyp2/trafficcontrol/internal/engine"
 )
 
+// rateSample collects the number of packets sent at a specific snapshot time
+type rateSample struct {
+	capturedAt  time.Time
+	packetsSent uint64
+}
+
 // consoleReporter implements report and holds mutex lock preventing jumbled output
 type consoleReporter struct {
-	mu     sync.Mutex
-	output io.Writer
+	mu      sync.Mutex
+	output  io.Writer
+	samples map[string]rateSample
 }
 
 func newConsoleReporter(output io.Writer) *consoleReporter {
 	return &consoleReporter{
-		output: output,
+		output:  output,
+		samples: make(map[string]rateSample),
 	}
 }
 
@@ -25,23 +35,32 @@ func (r *consoleReporter) Report(update engine.StreamUpdate) {
 	defer r.mu.Unlock()
 
 	snapshot := update.Snapshot
+	fmt.Fprintf(
+		r.output,
+		"[%s: %s]",
+		strings.ToUpper(string(update.Kind)),
+		snapshot.Name,
+	)
 
 	switch update.Kind {
 	case engine.UpdateStarted:
+		r.rememberSample(update.Snapshot)
+
 		fmt.Fprintf(
 			r.output,
-			"[%s] started rate=%d pkt/s\n",
-			snapshot.Name,
+			" rate=%d pkt/s\n",
 			snapshot.TargetRate,
 		)
 
 	case engine.UpdateSnapshot:
+		actualRate := r.actualSendRate(update.Snapshot)
+
 		fmt.Fprintf(
 			r.output,
-			"[%s] status=%s rate=%d pkt/s packets=%d bytes=%d\n",
-			snapshot.Name,
+			" status=%s target=%d sends/s actual=%.1f sends/s sends=%d bytes=%d\n",
 			snapshot.Status,
 			snapshot.TargetRate,
+			actualRate,
 			snapshot.PacketsSent,
 			snapshot.BytesSent,
 		)
@@ -49,8 +68,7 @@ func (r *consoleReporter) Report(update engine.StreamUpdate) {
 	case engine.UpdateRateChanged:
 		fmt.Fprintf(
 			r.output,
-			"[%s] rate changed rate=%d pkt/s status=%s\n",
-			snapshot.Name,
+			" rate=%d pkt/s status=%s\n",
 			snapshot.TargetRate,
 			snapshot.Status,
 		)
@@ -58,8 +76,7 @@ func (r *consoleReporter) Report(update engine.StreamUpdate) {
 	case engine.UpdatePaused:
 		fmt.Fprintf(
 			r.output,
-			"[%s] paused packets=%d bytes=%d\n",
-			snapshot.Name,
+			" packets=%d bytes=%d\n",
 			snapshot.PacketsSent,
 			snapshot.BytesSent,
 		)
@@ -67,16 +84,14 @@ func (r *consoleReporter) Report(update engine.StreamUpdate) {
 	case engine.UpdateResumed:
 		fmt.Fprintf(
 			r.output,
-			"[%s] resumed rate=%d pkt/s\n",
-			snapshot.Name,
+			" rate=%d pkt/s\n",
 			snapshot.TargetRate,
 		)
 
 	case engine.UpdateStopped:
 		fmt.Fprintf(
 			r.output,
-			"[%s] stopped packets=%d bytes=%d\n",
-			snapshot.Name,
+			" packets=%d bytes=%d\n",
 			snapshot.PacketsSent,
 			snapshot.BytesSent,
 		)
@@ -84,8 +99,7 @@ func (r *consoleReporter) Report(update engine.StreamUpdate) {
 	case engine.UpdateCanceled:
 		fmt.Fprintf(
 			r.output,
-			"[%s] canceled packets=%d bytes=%d\n",
-			snapshot.Name,
+			" packets=%d bytes=%d\n",
 			snapshot.PacketsSent,
 			snapshot.BytesSent,
 		)
@@ -93,8 +107,7 @@ func (r *consoleReporter) Report(update engine.StreamUpdate) {
 	case engine.UpdateFailed:
 		fmt.Fprintf(
 			r.output,
-			"[%s] failed error=%q packets=%d bytes=%d\n",
-			snapshot.Name,
+			" error=%q packets=%d bytes=%d\n",
 			snapshot.LastError,
 			snapshot.PacketsSent,
 			snapshot.BytesSent,
@@ -103,10 +116,53 @@ func (r *consoleReporter) Report(update engine.StreamUpdate) {
 	default:
 		fmt.Fprintf(
 			r.output,
-			"[%s] update=%s status=%s\n",
-			snapshot.Name,
-			update.Kind,
+			" status=%s\n",
 			snapshot.Status,
 		)
 	}
+}
+
+// rememberSample records packetSent at given captured timestamp
+func (r *consoleReporter) rememberSample(
+	snapshot engine.StreamSnapshot,
+) {
+	r.samples[snapshot.Name] = rateSample{
+		capturedAt:  snapshot.CapturedAt,
+		packetsSent: snapshot.PacketsSent,
+	}
+}
+
+// actualSendRate calculates the send rate based on previously recorded snapshot
+// sendRate = (packetsSent - previousPacketsSent) / (current_time - previous_time)
+func (r *consoleReporter) actualSendRate(
+	snapshot engine.StreamSnapshot,
+) float64 {
+	current := rateSample{
+		capturedAt:  snapshot.CapturedAt,
+		packetsSent: snapshot.PacketsSent,
+	}
+
+	// --- Retrieve the previous captured metric
+	previous, exists := r.samples[snapshot.Name]
+	r.samples[snapshot.Name] = current // Update last recorded
+
+	if !exists {
+		return 0
+	}
+
+	elapsed := current.capturedAt.Sub(
+		previous.capturedAt,
+	).Seconds()
+
+	if elapsed <= 0 {
+		return 0
+	}
+
+	if current.packetsSent < previous.packetsSent {
+		return 0
+	}
+
+	sent := current.packetsSent - previous.packetsSent
+
+	return float64(sent) / elapsed
 }
