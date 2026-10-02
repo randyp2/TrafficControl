@@ -1,0 +1,13 @@
+name: udp-benchmark-100k
+
+streams:
+  - name: benchmark
+    protocol: udp
+    target: 127.0.0.1:5000
+    rate: 100000
+    payload: benchmark
+
+events:
+  - at: 10s
+    stream: benchmark
+    action: stop
