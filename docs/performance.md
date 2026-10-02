@@ -4,11 +4,13 @@ This document records repeatable baselines and the impact of future performance 
 
 ## Method
 
-- Environment: macOS arm64, Go 1.27.1
+- Environment: Apple M4, 10 logical CPUs, 16 GiB memory
+- Software: macOS 26.6.2 arm64, Go 1.27.1
 - Protocol: UDP over `127.0.0.1`
 - Payload: 9 bytes (`benchmark`)
 - Duration: 10 seconds
-- Sample size: one run per target
+- Rate sweep: one run per target
+- Boundary tests: five runs at 100k and 150k
 - Listener drain time: 250 milliseconds after the sender stopped
 
 ## Metrics
@@ -19,11 +21,14 @@ This document records repeatable baselines and the impact of future performance 
 - **Received:** Datagrams read by the TrafficControl listener.
 - **Average sent/s:** Packets sent divided by the sender's actual runtime.
 - **Pacing accuracy:** `sent ÷ expected × 100`. This measures how closely the generator followed the requested rate, not network delivery.
+- **Pacing range:** The lowest and highest pacing accuracy across repeated runs. A narrow range indicates consistent behavior.
 - **Delivery:** `received ÷ sent × 100`. This measures how many reported sends reached the listener during the run.
+- **CPU efficiency:** Packets processed per user-plus-system CPU second. Higher values mean less CPU work per packet.
+- **Peak memory:** The maximum resident memory reported by `/usr/bin/time -l`, shown as the median across repeated runs.
 
-For example, the 100k run sent 991,767 of 1,000,000 expected packets, giving 99.1767% pacing accuracy. The listener received all 991,767 sends, giving 100% observed delivery.
+For example, the median 100k boundary run sent 992,954 of 1,000,000 expected packets, giving 99.2954% pacing accuracy. The listener received all 992,954 sends, giving 100% observed delivery.
 
-## Baseline
+## Initial rate sweep
 
 | Target | Expected | Sent | Received | Average sent/s | Pacing accuracy | Delivery |
 | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
@@ -33,6 +38,26 @@ For example, the 100k run sent 991,767 of 1,000,000 expected packets, giving 99.
 | 100,000/s | 1,000,000 | 991,767 | 991,767 | 99,177.0 | 99.1767% | 100% |
 
 These are local loopback results, not a guarantee for remote networks or different machines. The matching sender and receiver totals show no application-level delivery loss in these runs. The growing pacing gap at 100k points to the sender as the first optimization target.
+
+## Sustainable-rate boundary
+
+A run passes when pacing accuracy is at least 99% and delivery is at least 99.99%.
+
+| Target | Runs | Median sent/s | Median pacing | Pacing range | Delivery |
+| ---: | ---: | ---: | ---: | ---: | ---: |
+| 100,000/s | 5 | 99,296.0 | 99.2954% | 99.2550% to 99.3777% | 100% |
+| 150,000/s | 5 | 140,668.7 | 93.7791% | 91.1206% to 95.9471% | 100% |
+
+The current maximum tested sustainable rate is 100,000 packets per second. The 150k target is the first failing rate because sender pacing drops below 99%, while matching sender and receiver totals continue to show no observed delivery loss.
+
+## Resource use at the boundary
+
+| Target | Sender packets/CPU-s | Receiver packets/CPU-s | Sender peak memory | Receiver peak memory |
+| ---: | ---: | ---: | ---: | ---: |
+| 100,000/s | 108,165 | 246,391 | 5.86 MiB | 9.88 MiB |
+| 150,000/s | 126,556 | 305,594 | 6.03 MiB | 9.80 MiB |
+
+Values are medians from five runs. Resource usage was collected separately for the sender and listener with `/usr/bin/time -l`.
 
 ## Plan of attack
 
