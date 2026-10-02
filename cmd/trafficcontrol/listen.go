@@ -82,6 +82,16 @@ func (r *receiverConsoleReporter) Report(snapshot receiver.Snapshot) {
 		snapshot.BytesReceived,
 	)
 
+	if snapshot.Final {
+		fmt.Fprintf(
+			r.output,
+			"[SUMMARY: udp] address=%s datagrams=%d bytes=%d\n",
+			snapshot.Address,
+			snapshot.DatagramsReceived,
+			snapshot.BytesReceived,
+		)
+	}
+
 	r.previous = &receiverSample{
 		capturedAt: snapshot.CapturedAt,
 		datagrams:  snapshot.DatagramsReceived,

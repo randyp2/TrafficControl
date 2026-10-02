@@ -41,7 +41,8 @@ func TestReceiverConsoleReporterFormatsSnapshots(t *testing.T) {
 		Final:             true,
 	})
 
-	want = "[RECEIVER_STOPPED: udp] address=127.0.0.1:5000 actual=8.0 datagrams/s bytes=24.0/s total_datagrams=18 total_bytes=54\n"
+	want = "[RECEIVER_STOPPED: udp] address=127.0.0.1:5000 actual=8.0 datagrams/s bytes=24.0/s total_datagrams=18 total_bytes=54\n" +
+		"[SUMMARY: udp] address=127.0.0.1:5000 datagrams=18 bytes=54\n"
 	if got := output.String(); got != want {
 		t.Fatalf("output = %q, want %q", got, want)
 	}

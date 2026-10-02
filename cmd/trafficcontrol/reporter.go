@@ -95,6 +95,7 @@ func (r *consoleReporter) Report(update engine.StreamUpdate) {
 			snapshot.PacketsSent,
 			snapshot.BytesSent,
 		)
+		r.writeSummary(update)
 
 	case engine.UpdateCanceled:
 		fmt.Fprintf(
@@ -103,6 +104,7 @@ func (r *consoleReporter) Report(update engine.StreamUpdate) {
 			snapshot.PacketsSent,
 			snapshot.BytesSent,
 		)
+		r.writeSummary(update)
 
 	case engine.UpdateFailed:
 		fmt.Fprintf(
@@ -120,6 +122,31 @@ func (r *consoleReporter) Report(update engine.StreamUpdate) {
 			snapshot.Status,
 		)
 	}
+}
+
+func (r *consoleReporter) writeSummary(update engine.StreamUpdate) {
+	snapshot := update.Snapshot
+	duration := snapshot.CapturedAt.Sub(snapshot.StartedAt)
+	if duration < 0 {
+		duration = 0
+	}
+
+	var averageRate float64
+	if duration > 0 {
+		averageRate = float64(snapshot.PacketsSent) / duration.Seconds()
+	}
+
+	fmt.Fprintf(
+		r.output,
+		"[SUMMARY: %s] reason=%s duration=%.3fs target=%d packets/s packets=%d bytes=%d average=%.1f packets/s\n",
+		snapshot.Name,
+		update.Kind,
+		duration.Seconds(),
+		snapshot.TargetRate,
+		snapshot.PacketsSent,
+		snapshot.BytesSent,
+		averageRate,
+	)
 }
 
 // rememberSample records packetSent at given captured timestamp
