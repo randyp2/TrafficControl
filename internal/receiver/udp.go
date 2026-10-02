@@ -2,14 +2,18 @@ package receiver
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"time"
 )
 
-const defaultReportInterval = time.Second
-const maxUdpDatagramSize = 64 * 1024
+const (
+	defaultReportInterval = time.Second
+	maxUDPDatagramSize    = 64 * 1024
+)
 
+// UDPReceiver receives and counts UDP datagrams.
 type UDPReceiver struct {
 	conn           *net.UDPConn
 	reportInterval time.Duration
@@ -17,9 +21,8 @@ type UDPReceiver struct {
 
 // ListenUDP binds a listener to an address
 func ListenUDP(address string, reportInterval time.Duration) (*UDPReceiver, error) {
-
 	if address == "" {
-		return nil, fmt.Errorf("[RECEIVER] address is empty\n")
+		return nil, errors.New("UDP receiver address is required")
 	}
 
 	if reportInterval <= 0 {
@@ -28,18 +31,23 @@ func ListenUDP(address string, reportInterval time.Duration) (*UDPReceiver, erro
 
 	addr, err := net.ResolveUDPAddr("udp", address)
 	if err != nil {
-		return nil, fmt.Errorf("[RECEIVER] resolve UDP receiver address: %w\n", err)
+		return nil, fmt.Errorf("resolve UDP receiver address: %w", err)
 	}
 
 	conn, err := net.ListenUDP("udp", addr)
 	if err != nil {
-		return nil, fmt.Errorf("[RECEIVER] listen for UDP traffic: %w\n", err)
+		return nil, fmt.Errorf("listen for UDP traffic: %w", err)
 	}
 
 	return &UDPReceiver{
 		conn:           conn,
 		reportInterval: reportInterval,
 	}, nil
+}
+
+// Address returns the receiver's bound address.
+func (r *UDPReceiver) Address() string {
+	return r.conn.LocalAddr().String()
 }
 
 // Run runs an infinite loop thats listens on a UDP socket and continuously reports datagrams
@@ -50,11 +58,12 @@ func (r *UDPReceiver) Run(
 	defer r.conn.Close()
 
 	startedAt := time.Now()
+	address := r.Address()
 	var totals counters
 
 	stopReporting := startReporting(
 		ctx,
-		r.conn.LocalAddr().String(),
+		address,
 		startedAt,
 		r.reportInterval,
 		&totals,
@@ -67,14 +76,13 @@ func (r *UDPReceiver) Run(
 	})
 	defer stopClose()
 
-	buffer := make([]byte, maxUdpDatagramSize)
+	buffer := make([]byte, maxUDPDatagramSize)
 
 	var runErr error
+
 	// --- Continuously read from UPD until context is canceled or error
 	for {
-
 		n, _, err := r.conn.ReadFromUDP(buffer)
-
 		if err != nil {
 			// Cancelled because ctx was canceled
 			if ctx.Err() != nil {
@@ -82,9 +90,10 @@ func (r *UDPReceiver) Run(
 			}
 
 			runErr = fmt.Errorf(
-				"[RECEIVER UDP] error reading UDP traffic: %w",
+				"read UDP traffic: %w",
 				err,
 			)
+			break
 		}
 
 		totals.bytes.Add(uint64(n))
@@ -97,7 +106,7 @@ func (r *UDPReceiver) Run(
 	if reporter != nil {
 		reporter.Report(
 			totals.snapshot(
-				r.conn.LocalAddr().String(),
+				address,
 				startedAt,
 				time.Now(),
 				true,
@@ -151,4 +160,3 @@ func startReporting(
 		<-done   // Blocks until startReporting is fully cleaned up
 	}
 }
-

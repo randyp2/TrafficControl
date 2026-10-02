@@ -9,8 +9,8 @@ import (
 type Protocol string
 
 const (
-	// ProtcolUDP listens for UDP datagrams
-	ProtcolUDP Protocol = "udp"
+	// ProtocolUDP listens for UDP datagrams
+	ProtocolUDP Protocol = "udp"
 )
 
 // Snapshot collects metrics based on what the receiver has observed
@@ -24,6 +24,7 @@ type Snapshot struct {
 	Final             bool
 }
 
+// Reporter receives snapshots from a traffic receiver.
 type Reporter interface {
 	Report(Snapshot)
 }
@@ -41,7 +42,7 @@ func (c *counters) snapshot(
 	final bool,
 ) Snapshot {
 	return Snapshot{
-		Protocol:          ProtcolUDP,
+		Protocol:          ProtocolUDP,
 		Address:           address,
 		DatagramsReceived: c.datagrams.Load(),
 		BytesReceived:     c.bytes.Load(),

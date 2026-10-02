@@ -15,6 +15,8 @@ func run(args []string) error {
 	switch args[0] {
 	case "run":
 		return runCommand(args[1:])
+	case "listen":
+		return listenCommand(args[1:])
 	default:
 		return fmt.Errorf(
 			"trafficcontrol: '%s' is not a trafficcontrol command. See 'trafficcontrol --help'",

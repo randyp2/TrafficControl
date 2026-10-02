@@ -30,7 +30,7 @@ func TestConsoleReporterFormatsUpdates(t *testing.T) {
 		{
 			name: "snapshot",
 			kind: engine.UpdateSnapshot,
-			want: "[SNAPSHOT: telemetry] status=running rate=25 pkt/s packets=10 bytes=50\n",
+			want: "[SNAPSHOT: telemetry] status=running target=25 sends/s actual=0.0 sends/s sends=10 bytes=50\n",
 		},
 		{
 			name: "rate changed",
