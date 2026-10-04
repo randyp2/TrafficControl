@@ -127,9 +127,7 @@ func (r *consoleReporter) Report(update engine.StreamUpdate) {
 func (r *consoleReporter) writeSummary(update engine.StreamUpdate) {
 	snapshot := update.Snapshot
 	duration := snapshot.CapturedAt.Sub(snapshot.StartedAt)
-	if duration < 0 {
-		duration = 0
-	}
+	duration = max(duration, 0)
 
 	var averageRate float64
 	if duration > 0 {

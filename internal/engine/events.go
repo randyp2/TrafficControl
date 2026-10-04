@@ -10,10 +10,12 @@ import (
 // handleEvent adjusts ticker based on action type and return true if action
 // was to stop
 func handleEvent(
-	ticker *time.Ticker,
+	sendPacer *boundedPacer,
 	event scenario.Event,
 	state *streamState,
 ) (bool, error) {
+	now := time.Now()
+
 	switch event.Action {
 	case scenario.ActionSetRate:
 		if event.Rate <= 0 {
@@ -33,8 +35,8 @@ func handleEvent(
 		}
 		state.targetRate = event.Rate
 
-		if state.status == streamRunning {
-			ticker.Reset(interval)
+		if err := sendPacer.SetRate(event.Rate, now); err != nil {
+			return false, err
 		}
 
 		return false, nil
@@ -45,7 +47,7 @@ func handleEvent(
 			return false, nil
 		}
 
-		ticker.Stop()
+		sendPacer.Pause()
 		state.status = streamPaused
 		return false, nil
 
@@ -62,7 +64,7 @@ func handleEvent(
 				state.targetRate,
 			)
 		}
-		ticker.Reset(interval)
+		sendPacer.Resume(now)
 		state.status = streamRunning
 
 		return false, nil

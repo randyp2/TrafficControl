@@ -35,14 +35,19 @@ func RunStream(
 	// Close socket at the end of function lifecycle
 	defer sender.Close()
 
-	interval := time.Second / time.Duration(stream.Rate) // Time between packet sends
-
-	// Send timed events to ticker.C channel
-	sendTicker := time.NewTicker(interval)
-	defer sendTicker.Stop()
-
-	// Report update
 	now := time.Now()
+	sendPacer, err := newBoundedPacer(stream.Rate, now)
+
+	if err != nil {
+
+		return fmt.Errorf(
+			"[STREAM]: failed creating a pace for stream %q: %w\n",
+			stream.Name,
+			err,
+		)
+	}
+	defer sendPacer.Stop()
+
 	state := streamState{
 		targetRate: stream.Rate,
 		status:     streamRunning,
@@ -75,17 +80,35 @@ func RunStream(
 
 			return nil
 
-		case <-sendTicker.C:
-			// Timed event occured
-			if err := sender.Send(payload); err != nil {
-				sendErr := fmt.Errorf("send stream %q: %w", stream.Name, err)
-				return failStream(&state, reporter, stream.Name, sendErr)
+		case <-sendPacer.C():
+			// Timed event from pacer occured
+			batchSize := sendPacer.packetsDue(
+				time.Now(),
+			)
+
+			for range batchSize {
+				if err := sender.Send(payload); err != nil {
+					sendErr := fmt.Errorf(
+						"[STREAM] Failed sending payload for stream %q: %w\n",
+						stream.Name,
+						err,
+					)
+
+					return failStream(
+						&state,
+						reporter,
+						stream.Name,
+						sendErr,
+					)
+				}
+
+				state.packetsSent++
+				state.bytesSent += uint64(len(payload))
 			}
 
-			// Update counters
-			state.packetsSent++
-			state.bytesSent += uint64(len(payload))
-			state.updatedAt = time.Now()
+			sentAt := time.Now()
+			state.updatedAt = sentAt
+			sendPacer.Schedule(sentAt)
 
 		case <-snapshotC:
 			capturedAt := time.Now()
@@ -99,7 +122,7 @@ func RunStream(
 			previousState := state.status
 			previousRate := state.targetRate
 
-			stop, err := handleEvent(sendTicker, event, &state)
+			stop, err := handleEvent(sendPacer, event, &state)
 			if err != nil {
 				eventErr := fmt.Errorf(
 					"handle event for stream %q: %w",

@@ -151,11 +151,22 @@ func TestHandleEvent(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ticker := time.NewTicker(time.Hour)
-			defer ticker.Stop()
+			startedAt := time.Now()
+			pacer, err := newBoundedPacer(
+				tt.initialState.targetRate,
+				startedAt,
+			)
+			if err != nil {
+				t.Fatalf("newBoundedPacer() error = %v", err)
+			}
+			defer pacer.Stop()
+
+			if tt.initialState.status == streamPaused {
+				pacer.Pause()
+			}
 
 			state := tt.initialState
-			gotStop, err := handleEvent(ticker, tt.event, &state)
+			gotStop, err := handleEvent(pacer, tt.event, &state)
 
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("handleEvent() error = %v, wantErr %v", err, tt.wantErr)
@@ -165,6 +176,14 @@ func TestHandleEvent(t *testing.T) {
 			}
 			if state != tt.wantState {
 				t.Fatalf("handleEvent() state = %#v, want %#v", state, tt.wantState)
+			}
+			if pacer.rate != state.targetRate {
+				t.Fatalf("pacer rate = %d, want %d", pacer.rate, state.targetRate)
+			}
+
+			wantRunning := state.status == streamRunning
+			if pacer.running != wantRunning {
+				t.Fatalf("pacer running = %t, want %t", pacer.running, wantRunning)
 			}
 		})
 	}
