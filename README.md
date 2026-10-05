@@ -18,6 +18,6 @@ go run ./cmd/trafficcontrol run examples/scenarios/benchmark/udp/50k.yaml
 
 ## Performance
 
-The current local UDP baseline delivered every reported send at targets through 150,000 packets per second. Across five runs per target, median pacing error was 0.0006% at 100k and 0.0092% at 150k, with 100% observed delivery.
+The current local UDP baseline delivered every reported send at targets through 200,000 packets per second. Across five runs per target, median pacing error stayed at or below 0.0007% at 100k, 150k, and 200k, with 100% observed delivery.
 
 See [docs/performance.md](docs/performance.md) for the benchmark method, results, and optimization plan.

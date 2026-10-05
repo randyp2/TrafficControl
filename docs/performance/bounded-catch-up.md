@@ -54,26 +54,20 @@ These results use UDP over local loopback, a 9-byte payload, 10-second runs, and
 | Target | Before sent/s | After sent/s | Before target ratio | After target ratio | Before pacing error | After pacing error | Delivery |
 | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | 100,000/s | 99,296.0 | 99,999.9 | 99.2954% | 99.9994% | 0.7046% | 0.0006% | 100% |
-| 150,000/s | 140,668.7 | 150,014.9 | 93.7791% | 100.0092% | 6.2209% | 0.0092% | 100% |
+| 150,000/s | 140,668.7 | 149,999.8 | 93.7791% | 99.9993% | 6.2209% | 0.0007% | 100% |
 
-The bounded pacer fixed the large undershoot at both rates. At 150k, the sender moved from about 9,331 missing sends per second to about 15 extra sends per second.
+The bounded pacer fixed the large undershoot at both rates. Carrying fractional nanoseconds then removed the small, repeatable overshoot at 150k.
 
-The result has a CPU tradeoff. Sender efficiency changed from 108,165 to 96,618 packets per CPU-second at 100k, about a 10.7% decrease. At 150k it changed from 126,556 to 125,115 packets per CPU-second, about a 1.1% decrease. The pacer does more work to preserve timing accuracy, so this is worth tracking as I continue optimizing.
+The result has a CPU tradeoff. Sender efficiency changed from 108,165 to 96,618 packets per CPU-second at 100k, about a 10.7% decrease. At 150k it changed from 126,556 to 126,141 packets per CPU-second, about a 0.3% decrease. The pacer does more work to preserve timing accuracy, so this is worth tracking as I continue optimizing.
 
-## Why 150k currently overshoots
+## What I learned about nanosecond precision
 
-The current interval calculation uses integer nanoseconds:
+I learned that `time.Duration` stores whole nanoseconds, so dividing one second by a rate can truncate part of the interval. At 150k, the exact interval is:
 
 ```text
 1,000,000,000 ns / 150,000 packets = 6,666.666... ns per packet
 ```
 
-`time.Duration` truncates that result to 6,666 ns. That interval represents:
+My original calculation kept only 6,666 ns, which represents about 150,015 packets per second. Once bounded catch-up stopped losing send opportunities, that small timing error became visible as a repeatable overshoot.
 
-```text
-1,000,000,000 ns / 6,666 ns = 150,015.0015 packets per second
-```
-
-The measured median of 150,014.9 packets per second closely matches that effective rate. At 100k, the interval is exactly 10,000 ns, so this truncation does not create the same consistent overshoot.
-
-The next pacing improvement is to preserve the fractional remainder instead of representing the whole rate as one truncated packet interval.
+I fixed it by carrying the discarded fraction into future deadlines. Instead of always waiting 6,666 ns, the pacer distributes intervals as 6,666 ns, 6,667 ns, and 6,667 ns. Those three intervals total exactly 20,000 ns. After the change, the five-run median moved from 150,014.9 to 149,999.8 packets per second with 100% observed delivery.
