@@ -13,11 +13,15 @@ const maxCatchUpWindow = 5 * time.Millisecond
 
 // boundedPacer holds an ongoing timer used to determine how many packets must be sent
 type boundedPacer struct {
-	timer    *time.Timer
-	rate     int
-	interval time.Duration
-	next     time.Time
-	running  bool
+	timer *time.Timer
+
+	rate              int
+	interval          time.Duration // Whole number part of current interval
+	intervalRemainder int64         // Remainder of current interval if any
+	remainderCarry    int64         // Fractions that have been accumulated but are not yet a whole NS
+
+	next    time.Time
+	running bool
 }
 
 func newBoundedPacer(
@@ -30,17 +34,23 @@ func newBoundedPacer(
 		return nil, err
 	}
 
-	// Return bounded pacer and start timer
-	return &boundedPacer{
-		timer:    time.NewTimer(interval),
-		rate:     rate,
-		interval: interval,
-		next:     startedAt.Add(interval),
-		running:  true,
-	}, nil
+	pacer := &boundedPacer{
+		rate:              rate,
+		interval:          interval,
+		intervalRemainder: int64(time.Second) % int64(rate),
+		next:              startedAt.Add(interval),
+		running:           true,
+	}
+
+	pacer.resetDeadline(startedAt)
+
+	pacer.timer = time.NewTimer(
+		pacer.next.Sub(startedAt),
+	)
+
+	return pacer, nil
 }
 
-// intervalForRate finds the interval between packets based on rate
 func intervalForRate(rate int) (time.Duration, error) {
 	if rate <= 0 {
 		return 0, fmt.Errorf(
@@ -65,23 +75,43 @@ func (p *boundedPacer) C() <-chan time.Time {
 	return p.timer.C
 }
 
+func (p *boundedPacer) advanceDeadline() {
+	p.next = p.next.Add(p.interval)
+
+	p.remainderCarry += p.intervalRemainder
+
+	extraNS := p.remainderCarry / int64(p.rate)
+	p.remainderCarry %= int64(p.rate)
+
+	p.next = p.next.Add(
+		time.Duration(extraNS),
+	)
+}
+
+func (p *boundedPacer) resetDeadline(now time.Time) {
+	p.next = now
+	p.remainderCarry = 0
+	p.advanceDeadline()
+}
+
 func (p *boundedPacer) packetsDue(now time.Time) int {
 	if !p.running || now.Before(p.next) {
 		return 0
 	}
 
-	due := int(now.Sub(p.next)/p.interval) + 1
+	due := 0
 	maximum := p.maximumBatch()
 
-	if due > maximum {
-		due = maximum
-
-		// Discard debt older than the allowed catch up window
-		p.next = now.Add(p.interval)
-		return due
+	for due < maximum && !now.Before(p.next) {
+		due++
+		p.advanceDeadline()
 	}
 
-	p.next = p.next.Add(time.Duration(due) * p.interval)
+	if due == maximum && !now.Before(p.next) {
+		// Sender is behind the catch-up window
+		// Discard the older debt and continue from current time
+		p.resetDeadline(now)
+	}
 
 	return due
 }
@@ -129,10 +159,12 @@ func (p *boundedPacer) SetRate(
 
 	p.rate = rate
 	p.interval = interval
-	p.next = now.Add(interval)
+	p.intervalRemainder = int64(time.Second) % int64(rate)
+
+	p.resetDeadline(now)
 
 	if p.running {
-		p.timer.Reset(interval)
+		p.timer.Reset(p.next.Sub(now))
 	}
 
 	return nil
@@ -155,9 +187,9 @@ func (p *boundedPacer) Resume(now time.Time) {
 	}
 
 	// Resume from now so the paused elapsed time does not become packet debt
-	p.next = now.Add(p.interval)
+	p.resetDeadline(now)
 	p.running = true
-	p.timer = time.NewTimer(p.interval)
+	p.timer = time.NewTimer(p.next.Sub(now))
 }
 
 func (p *boundedPacer) Stop() {

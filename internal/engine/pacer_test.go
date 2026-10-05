@@ -47,6 +47,34 @@ func TestIntervalForRate(t *testing.T) {
 	}
 }
 
+func TestBoundedPacerPreservesFractionalRate(t *testing.T) {
+	startedAt := time.Date(2026, time.October, 3, 12, 0, 0, 0, time.UTC)
+	const rate = 150000
+
+	pacer := newTestPacer(t, rate, startedAt)
+
+	// The constructor schedules the first packet deadline.
+	for packet := 1; packet < rate; packet++ {
+		pacer.advanceDeadline()
+	}
+
+	if got := pacer.next.Sub(startedAt); got != time.Second {
+		t.Fatalf(
+			"%d packet deadlines span %s, want %s",
+			rate,
+			got,
+			time.Second,
+		)
+	}
+
+	if pacer.remainderCarry != 0 {
+		t.Fatalf(
+			"remainderCarry = %d, want 0",
+			pacer.remainderCarry,
+		)
+	}
+}
+
 func TestBoundedPacerPacketsDue(t *testing.T) {
 	startedAt := time.Date(2026, time.October, 3, 12, 0, 0, 0, time.UTC)
 	pacer := newTestPacer(t, 1000, startedAt)
