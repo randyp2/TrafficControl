@@ -8,6 +8,7 @@ import (
 	"github.com/randyp2/trafficcontrol/internal/scenario"
 	"github.com/randyp2/trafficcontrol/internal/transport/tcp"
 	"github.com/randyp2/trafficcontrol/internal/transport/udp"
+	"honnef.co/go/tools/analysis/facts/generated"
 )
 
 const snapshotInterval = time.Second
@@ -57,6 +58,7 @@ func RunStream(
 	}
 	emitUpdate(reporter, UpdateStarted, state.snapshot(stream.Name, now))
 
+	// Initialize reporter and snapshot channel to capture timed snapshots
 	var snapshotTicker *time.Ticker
 	var snapshotC <-chan time.Time
 
@@ -65,6 +67,17 @@ func RunStream(
 		snapshotC = snapshotTicker.C
 		defer snapshotTicker.Stop()
 	}
+
+	// Initialize delayed queue
+	delayedPackets := newDelayQueue()
+	var releaseTimer *time.Timer
+	var releaseC <-chan time.Time
+
+	defer func() {
+		if releaseTimer != nil {
+			releaseTimer.Stop()
+		}
+	}()
 
 	payload := []byte(stream.Payload)
 	for {
@@ -82,33 +95,86 @@ func RunStream(
 
 		case <-sendPacer.C():
 			// Timed event from pacer occured
+			generatedAt := time.Now()
 			batchSize := sendPacer.packetsDue(
 				time.Now(),
 			)
 
-			for range batchSize {
-				if err := sender.Send(payload); err != nil {
-					sendErr := fmt.Errorf(
-						"[STREAM] Failed sending payload for stream %q: %w\n",
-						stream.Name,
-						err,
-					)
+			if state.latency > 0 {
+				// Compute actual release time w/ latency
+				releaseAt := generatedAt.Add(state.latency)
 
+				for range batchSize {
+					delayedPackets.Enqueue(payload, releaseAt)
+				}
+
+				releaseTimer, releaseC = armReleaseTimer(
+					releaseTimer,
+					delayedPackets,
+					time.Now(),
+				)
+
+			} else {
+				for range batchSize {
+					if err := sendPayload(
+						sender,
+						payload,
+						&state,
+						stream.Name,
+					); err != nil {
+						return failStream(
+							&state,
+							reporter,
+							stream.Name,
+							err,
+						)
+					}
+				}
+
+				if batchSize > 0 {
+					state.updatedAt = time.Now()
+				}
+			}
+
+			sendPacer.Schedule(time.Now())
+
+		case <-releaseC:
+			// Delayed packets until releasedAt time should send now
+			releasedAt := time.Now()
+			releasedAny := false
+
+			for {
+				packet, ready := delayedPackets.PopDue(releasedAt)
+				if !ready {
+					break
+				}
+
+				if err := sendPayload(
+					sender,
+					packet.payload,
+					&state,
+					stream.Name,
+				); err != nil {
 					return failStream(
 						&state,
 						reporter,
 						stream.Name,
-						sendErr,
+						err,
 					)
 				}
 
-				state.packetsSent++
-				state.bytesSent += uint64(len(payload))
+				releasedAny = true
 			}
 
-			sentAt := time.Now()
-			state.updatedAt = sentAt
-			sendPacer.Schedule(sentAt)
+			if releasedAny {
+				state.updatedAt = time.Now()
+			}
+
+			releaseTimer, releaseC = armReleaseTimer(
+				releaseTimer,
+				delayedPackets,
+				time.Now(),
+			)
 
 		case <-snapshotC:
 			capturedAt := time.Now()
@@ -175,6 +241,52 @@ func RunStream(
 			}
 		}
 	}
+}
+
+func sendPayload(
+	streamSender sender,
+	payload []byte,
+	state *streamState,
+	streamName string,
+) error {
+	if err := streamSender.Send(payload); err != nil {
+		return fmt.Errorf(
+			"[STREAM] Failed sending payload for stream %q: %w\n",
+			streamName,
+			err,
+		)
+	}
+
+	state.packetsSent++
+	state.bytesSent += uint64(len(payload))
+
+	return nil
+}
+
+// armReleaseTimer resets the timer based on the daly from now to releaseAt
+func armReleaseTimer(
+	timer *time.Timer,
+	queue *delayQueue,
+	now time.Time,
+) (*time.Timer, <-chan time.Time) {
+	packet, exists := queue.Peek()
+	if !exists {
+		if timer != nil {
+			timer.Stop()
+		}
+
+		return timer, nil
+	}
+
+	delay := max(0, packet.releaseAt.Sub(now))
+
+	if timer == nil {
+		timer = time.NewTimer(delay)
+	} else {
+		timer.Reset(delay)
+	}
+
+	return timer, timer.C
 }
 
 // newSender is internal method that creates the sender based on the stream
