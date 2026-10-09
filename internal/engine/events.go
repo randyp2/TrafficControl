@@ -41,6 +41,17 @@ func handleEvent(
 
 		return false, nil
 
+	case scenario.ActionSetLatency:
+		if event.Latency < 0 {
+			return false, fmt.Errorf(
+				"latency cannot be negative: %s\n",
+				event.Latency,
+			)
+		}
+
+		state.latency = event.Latency
+		return false, nil
+
 	case scenario.ActionPause:
 		// Already paused
 		if state.status == streamPaused {

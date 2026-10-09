@@ -89,9 +89,22 @@ func (e Event) Validate() error {
 			return errors.New("event rate must be > 0\n")
 		}
 
+		if e.Latency != 0 {
+			return fmt.Errorf("event action %q does not accept latency\n", e.Action)
+		}
+
 		interval := time.Second / time.Duration(e.Rate)
 		if interval <= 0 {
 			return fmt.Errorf("event rate %d is too high\n", e.Rate)
+		}
+
+	case ActionSetLatency:
+		if e.Latency < 0 {
+			return errors.New("event latency cannot be negative\n")
+		}
+
+		if e.Rate != 0 {
+			return fmt.Errorf("event action %q does not accept rate\n", e.Action)
 		}
 
 	case ActionPause, ActionResume, ActionStop:
@@ -100,6 +113,10 @@ func (e Event) Validate() error {
 				"event action %q does not accept a rate",
 				e.Action,
 			)
+		}
+
+		if e.Latency != 0 {
+			return fmt.Errorf("event action %q does not accept latency\n", e.Action)
 		}
 	default:
 		return fmt.Errorf("unsupported event action type: %q\n", e.Action)

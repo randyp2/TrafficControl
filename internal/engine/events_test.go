@@ -103,6 +103,55 @@ func TestHandleEvent(t *testing.T) {
 			},
 		},
 		{
+			name: "set latency",
+			initialState: streamState{
+				targetRate: 10,
+				status:     streamRunning,
+			},
+			event: scenario.Event{
+				Action:  scenario.ActionSetLatency,
+				Latency: 3 * time.Millisecond,
+			},
+			wantState: streamState{
+				targetRate: 10,
+				latency:    3 * time.Millisecond,
+				status:     streamRunning,
+			},
+		},
+		{
+			name: "turn latency off",
+			initialState: streamState{
+				targetRate: 10,
+				latency:    3 * time.Millisecond,
+				status:     streamRunning,
+			},
+			event: scenario.Event{
+				Action:  scenario.ActionSetLatency,
+				Latency: 0,
+			},
+			wantState: streamState{
+				targetRate: 10,
+				latency:    0,
+				status:     streamRunning,
+			},
+		},
+		{
+			name: "reject negative latency",
+			initialState: streamState{
+				targetRate: 10,
+				status:     streamRunning,
+			},
+			event: scenario.Event{
+				Action:  scenario.ActionSetLatency,
+				Latency: -time.Millisecond,
+			},
+			wantState: streamState{
+				targetRate: 10,
+				status:     streamRunning,
+			},
+			wantErr: true,
+		},
+		{
 			name: "stop stream",
 			initialState: streamState{
 				targetRate: 10,

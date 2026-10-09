@@ -121,6 +121,7 @@ func RunStream(
 
 			previousState := state.status
 			previousRate := state.targetRate
+			previousLatency := state.latency
 
 			stop, err := handleEvent(sendPacer, event, &state)
 			if err != nil {
@@ -135,6 +136,7 @@ func RunStream(
 
 			currentState := state.status
 			currentRate := state.targetRate
+			currentLatency := state.latency
 			eventTime := time.Now()
 
 			if stop {
@@ -163,6 +165,13 @@ func RunStream(
 				state.updatedAt = eventTime
 
 				emitUpdate(reporter, UpdateRateChanged, state.snapshot(stream.Name, eventTime))
+			}
+
+			// Changed latency
+			if previousLatency != currentLatency {
+				state.updatedAt = eventTime
+
+				emitUpdate(reporter, UpdateLatencyChanged, state.snapshot(stream.Name, eventTime))
 			}
 		}
 	}

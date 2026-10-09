@@ -73,6 +73,14 @@ func (r *consoleReporter) Report(update engine.StreamUpdate) {
 			snapshot.Status,
 		)
 
+	case engine.UpdateLatencyChanged:
+		fmt.Fprintf(
+			r.output,
+			" latency=%s status=%s\n",
+			snapshot.Latency,
+			snapshot.Status,
+		)
+
 	case engine.UpdatePaused:
 		fmt.Fprintf(
 			r.output,

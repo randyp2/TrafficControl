@@ -18,14 +18,15 @@ const (
 type UpdateKind string
 
 const (
-	UpdateStarted     UpdateKind = "started"
-	UpdateSnapshot    UpdateKind = "snapshot"
-	UpdateRateChanged UpdateKind = "rate_changed"
-	UpdatePaused      UpdateKind = "paused"
-	UpdateResumed     UpdateKind = "resumed"
-	UpdateStopped     UpdateKind = "stopped"
-	UpdateCanceled    UpdateKind = "canceled"
-	UpdateFailed      UpdateKind = "failed"
+	UpdateStarted        UpdateKind = "started"
+	UpdateSnapshot       UpdateKind = "snapshot"
+	UpdateRateChanged    UpdateKind = "rate_changed"
+	UpdateLatencyChanged UpdateKind = "latency_changed"
+	UpdatePaused         UpdateKind = "paused"
+	UpdateResumed        UpdateKind = "resumed"
+	UpdateStopped        UpdateKind = "stopped"
+	UpdateCanceled       UpdateKind = "canceled"
+	UpdateFailed         UpdateKind = "failed"
 )
 
 // StreamSnapshot represents a "point-in-time" snapshot view of a stream
@@ -33,6 +34,7 @@ type StreamSnapshot struct {
 	Name        string
 	Status      StreamStatus
 	TargetRate  int
+	Latency     time.Duration
 	PacketsSent uint64
 	BytesSent   uint64
 	StartedAt   time.Time
