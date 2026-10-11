@@ -110,6 +110,55 @@ func TestRunStreamPausesChangesRateAndResumes(t *testing.T) {
 	}
 }
 
+func TestRunStreamDelaysPackets(t *testing.T) {
+	addr, err := net.ResolveUDPAddr("udp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	listener, err := net.ListenUDP("udp", addr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer listener.Close()
+
+	stream := scenario.Stream{
+		Name:     "delayed",
+		Protocol: scenario.ProtocolUDP,
+		Target:   listener.LocalAddr().String(),
+		Rate:     20,
+		Payload:  "delayed",
+	}
+
+	events := make(chan scenario.Event, 2)
+	events <- scenario.Event{
+		Action:  scenario.ActionSetLatency,
+		Latency: 200 * time.Millisecond,
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	done := make(chan error, 1)
+	go func() {
+		done <- RunStream(ctx, stream, events, nil)
+	}()
+
+	expectNoUDPPacket(t, listener, 150*time.Millisecond)
+	waitForUDPPacket(t, listener, 300*time.Millisecond)
+
+	events <- scenario.Event{Action: scenario.ActionStop}
+
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("RunStream returned error: %v", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("RunStream did not stop after stop event")
+	}
+}
+
 func waitForUDPPacket(t *testing.T, listener *net.UDPConn, timeout time.Duration) {
 	t.Helper()
 

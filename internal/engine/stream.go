@@ -8,7 +8,6 @@ import (
 	"github.com/randyp2/trafficcontrol/internal/scenario"
 	"github.com/randyp2/trafficcontrol/internal/transport/tcp"
 	"github.com/randyp2/trafficcontrol/internal/transport/udp"
-	"honnef.co/go/tools/analysis/facts/generated"
 )
 
 const snapshotInterval = time.Second
@@ -97,7 +96,7 @@ func RunStream(
 			// Timed event from pacer occured
 			generatedAt := time.Now()
 			batchSize := sendPacer.packetsDue(
-				time.Now(),
+				generatedAt,
 			)
 
 			if state.latency > 0 {
