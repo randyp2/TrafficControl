@@ -1,0 +1,31 @@
+name: latency-pause-in-flight
+
+streams:
+  - name: telemetry
+    protocol: udp
+    target: 127.0.0.1:5000
+    rate: 10
+    payload: pause-in-flight
+
+events:
+  - at: 1s
+    stream: telemetry
+    action: set_latency
+    latency: 500ms
+
+  - at: 3s
+    stream: telemetry
+    action: pause
+
+  - at: 5s
+    stream: telemetry
+    action: resume
+
+  - at: 7s
+    stream: telemetry
+    action: set_latency
+    latency: 0s
+
+  - at: 9s
+    stream: telemetry
+    action: stop

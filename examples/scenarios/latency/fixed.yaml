@@ -1,0 +1,18 @@
+name: fixed-latency
+
+streams:
+  - name: telemetry
+    protocol: udp
+    target: 127.0.0.1:5000
+    rate: 10
+    payload: fixed-latency
+
+events:
+  - at: 0s
+    stream: telemetry
+    action: set_latency
+    latency: 500ms
+
+  - at: 8s
+    stream: telemetry
+    action: stop
