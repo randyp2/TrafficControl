@@ -3,6 +3,7 @@ package scenario
 import (
 	"errors"
 	"fmt"
+	"math"
 	"time"
 )
 
@@ -93,6 +94,10 @@ func (e Event) Validate() error {
 			return fmt.Errorf("event action %q does not accept latency\n", e.Action)
 		}
 
+		if e.LossPercent != 0 {
+			return fmt.Errorf("event action %q does not accept loss percent\n", e.Action)
+		}
+
 		interval := time.Second / time.Duration(e.Rate)
 		if interval <= 0 {
 			return fmt.Errorf("event rate %d is too high\n", e.Rate)
@@ -105,6 +110,19 @@ func (e Event) Validate() error {
 
 		if e.Rate != 0 {
 			return fmt.Errorf("event action %q does not accept rate\n", e.Action)
+		}
+
+	case ActionSetLoss:
+		if math.IsNaN(e.LossPercent) || e.LossPercent < 0 || e.LossPercent > 100 {
+			return fmt.Errorf("event loss percentage must be between 0 to 100: %.2f\n", e.LossPercent)
+		}
+
+		if e.Rate != 0 {
+			return fmt.Errorf("event action %q does not accept rate\n", e.Action)
+		}
+
+		if e.Latency != 0 {
+			return fmt.Errorf("event action %q does not accept latency\n", e.Action)
 		}
 
 	case ActionPause, ActionResume, ActionStop:

@@ -12,12 +12,15 @@ const (
 )
 
 type streamState struct {
-	targetRate int
-	latency    time.Duration
-	status     streamStatus
+	targetRate  int
+	latency     time.Duration
+	lossPercent float64
+	status      streamStatus
 
-	packetsSent uint64
-	bytesSent   uint64
+	packetsGenerated uint64
+	packetsDropped   uint64
+	packetsSent      uint64
+	bytesSent        uint64
 
 	startedAt time.Time
 	updatedAt time.Time
@@ -26,16 +29,19 @@ type streamState struct {
 
 func (s streamState) snapshot(name string, capturedAt time.Time) StreamSnapshot {
 	return StreamSnapshot{
-		Name:        name,
-		Status:      getStreamStatus(s.status),
-		TargetRate:  s.targetRate,
-		Latency:     s.latency,
-		PacketsSent: s.packetsSent,
-		BytesSent:   s.bytesSent,
-		StartedAt:   s.startedAt,
-		UpdatedAt:   s.updatedAt,
-		CapturedAt:  capturedAt,
-		LastError:   s.lastError,
+		Name:             name,
+		Status:           getStreamStatus(s.status),
+		TargetRate:       s.targetRate,
+		Latency:          s.latency,
+		LossPercent:      s.lossPercent,
+		PacketsGenerated: s.packetsGenerated,
+		PacketsDropped:   s.packetsDropped,
+		PacketsSent:      s.packetsSent,
+		BytesSent:        s.bytesSent,
+		StartedAt:        s.startedAt,
+		UpdatedAt:        s.updatedAt,
+		CapturedAt:       capturedAt,
+		LastError:        s.lastError,
 	}
 }
 

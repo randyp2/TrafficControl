@@ -22,6 +22,7 @@ const (
 	UpdateSnapshot       UpdateKind = "snapshot"
 	UpdateRateChanged    UpdateKind = "rate_changed"
 	UpdateLatencyChanged UpdateKind = "latency_changed"
+	UpdateLossChanged    UpdateKind = "packet_loss_changed"
 	UpdatePaused         UpdateKind = "paused"
 	UpdateResumed        UpdateKind = "resumed"
 	UpdateStopped        UpdateKind = "stopped"
@@ -31,16 +32,19 @@ const (
 
 // StreamSnapshot represents a "point-in-time" snapshot view of a stream
 type StreamSnapshot struct {
-	Name        string
-	Status      StreamStatus
-	TargetRate  int
-	Latency     time.Duration
-	PacketsSent uint64
-	BytesSent   uint64
-	StartedAt   time.Time
-	UpdatedAt   time.Time
-	CapturedAt  time.Time
-	LastError   string
+	Name             string
+	Status           StreamStatus
+	TargetRate       int
+	Latency          time.Duration
+	LossPercent      float64
+	PacketsGenerated uint64
+	PacketsDropped   uint64
+	PacketsSent      uint64
+	BytesSent        uint64
+	StartedAt        time.Time
+	UpdatedAt        time.Time
+	CapturedAt       time.Time
+	LastError        string
 }
 
 // StreamUpdate contains snapshot and why its emitted

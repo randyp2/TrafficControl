@@ -35,6 +35,7 @@ type Action string
 const (
 	ActionSetRate    Action = "set_rate"
 	ActionSetLatency Action = "set_latency"
+	ActionSetLoss    Action = "set_loss"
 	ActionStop       Action = "stop"
 	ActionPause      Action = "pause"
 	ActionResume     Action = "resume"
@@ -42,9 +43,10 @@ const (
 
 // Event describes a scheduled action for a stream.
 type Event struct {
-	At      time.Duration `yaml:"at"`
-	Stream  string        `yaml:"stream"`
-	Action  Action        `yaml:"action"`
-	Rate    int           `yaml:"rate,omitempty"`
-	Latency time.Duration `yaml:"latency,omitempty"`
+	At          time.Duration `yaml:"at"`
+	Stream      string        `yaml:"stream"`
+	Action      Action        `yaml:"action"`
+	Rate        int           `yaml:"rate,omitempty"`
+	Latency     time.Duration `yaml:"latency,omitempty"`
+	LossPercent float64       `yaml:"loss_percent,omitempty"`
 }
