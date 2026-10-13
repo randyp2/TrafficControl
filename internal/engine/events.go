@@ -2,6 +2,7 @@ package engine
 
 import (
 	"fmt"
+	"math"
 	"time"
 
 	"github.com/randyp2/trafficcontrol/internal/scenario"
@@ -50,6 +51,19 @@ func handleEvent(
 		}
 
 		state.latency = event.Latency
+		return false, nil
+
+	case scenario.ActionSetLoss:
+		if math.IsNaN(event.LossPercent) ||
+			event.LossPercent < 0 ||
+			event.LossPercent > 100 {
+			return false, fmt.Errorf(
+				"packet loss must be between 0 to 100: %.2f\n",
+				event.LossPercent,
+			)
+		}
+
+		state.lossPercent = event.LossPercent
 		return false, nil
 
 	case scenario.ActionPause:

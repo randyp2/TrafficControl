@@ -3,6 +3,7 @@ package engine
 import (
 	"context"
 	"fmt"
+	"math/rand"
 	"time"
 
 	"github.com/randyp2/trafficcontrol/internal/scenario"
@@ -79,6 +80,7 @@ func RunStream(
 	}()
 
 	payload := []byte(stream.Payload)
+	lossRNG := rand.New(rand.NewSource(stream.Seed))
 	for {
 		select {
 		case <-ctx.Done():
@@ -95,44 +97,52 @@ func RunStream(
 		case <-sendPacer.C():
 			// Timed event from pacer occured
 			generatedAt := time.Now()
+			releaseAt := generatedAt.Add(state.latency)
 			batchSize := sendPacer.packetsDue(
 				generatedAt,
 			)
 
-			if state.latency > 0 {
-				// Compute actual release time w/ latency
-				releaseAt := generatedAt.Add(state.latency)
-
-				for range batchSize {
-					delayedPackets.Enqueue(payload, releaseAt)
+			for range batchSize {
+				// Drop packets based on loss percentage
+				if state.lossPercent > 0 &&
+					lossRNG.Float64()*100 < state.lossPercent {
+					state.packetsDropped++
+					continue
 				}
 
+				// Enqueue and forget
+				if state.latency > 0 {
+					delayedPackets.Enqueue(payload, releaseAt)
+					continue
+				}
+
+				// Normal send
+				if err := sendPayload(
+					sender,
+					payload,
+					&state,
+					stream.Name,
+				); err != nil {
+					return failStream(
+						&state,
+						reporter,
+						stream.Name,
+						err,
+					)
+				}
+			}
+
+			// Set timer to release the delayed packets
+			if state.latency > 0 {
 				releaseTimer, releaseC = armReleaseTimer(
 					releaseTimer,
 					delayedPackets,
 					time.Now(),
 				)
+			}
 
-			} else {
-				for range batchSize {
-					if err := sendPayload(
-						sender,
-						payload,
-						&state,
-						stream.Name,
-					); err != nil {
-						return failStream(
-							&state,
-							reporter,
-							stream.Name,
-							err,
-						)
-					}
-				}
-
-				if batchSize > 0 {
-					state.updatedAt = time.Now()
-				}
+			if batchSize > 0 {
+				state.updatedAt = time.Now()
 			}
 
 			sendPacer.Schedule(time.Now())
@@ -187,6 +197,7 @@ func RunStream(
 			previousState := state.status
 			previousRate := state.targetRate
 			previousLatency := state.latency
+			previousLoss := state.lossPercent
 
 			stop, err := handleEvent(sendPacer, event, &state)
 			if err != nil {
@@ -202,6 +213,7 @@ func RunStream(
 			currentState := state.status
 			currentRate := state.targetRate
 			currentLatency := state.latency
+			currentLoss := state.lossPercent
 			eventTime := time.Now()
 
 			if stop {
@@ -237,6 +249,13 @@ func RunStream(
 				state.updatedAt = eventTime
 
 				emitUpdate(reporter, UpdateLatencyChanged, state.snapshot(stream.Name, eventTime))
+			}
+
+			// Changed loss percent
+			if previousLoss != currentLoss {
+				state.updatedAt = eventTime
+
+				emitUpdate(reporter, UpdateLossChanged, state.snapshot(stream.Name, eventTime))
 			}
 		}
 	}

@@ -27,6 +27,7 @@ type Stream struct {
 	Target   string   `yaml:"target"`
 	Rate     int      `yaml:"rate"`
 	Payload  string   `yaml:"payload"`
+	Seed     int64    `yaml:"seed,omitempty"` // Seed for random num generator
 }
 
 // Action identifies a scheduled change to a stream.
