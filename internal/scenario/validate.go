@@ -140,6 +140,10 @@ func (e Event) Validate() error {
 		if e.Latency != 0 {
 			return fmt.Errorf("event action %q does not accept latency\n", e.Action)
 		}
+
+		if e.Latency != 0 {
+			return fmt.Errorf("event action %q does not accept latency\n", e.Action)
+		}
 	default:
 		return fmt.Errorf("unsupported event action type: %q\n", e.Action)
 

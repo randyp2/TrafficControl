@@ -103,6 +103,8 @@ func RunStream(
 			)
 
 			for range batchSize {
+				state.packetsGenerated++
+
 				// Drop packets based on loss percentage
 				if state.lossPercent > 0 &&
 					lossRNG.Float64()*100 < state.lossPercent {
