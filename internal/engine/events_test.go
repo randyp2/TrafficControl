@@ -152,6 +152,71 @@ func TestHandleEvent(t *testing.T) {
 			wantErr: true,
 		},
 		{
+			name: "set packet loss",
+			initialState: streamState{
+				targetRate: 10,
+				status:     streamRunning,
+			},
+			event: scenario.Event{
+				Action:      scenario.ActionSetLoss,
+				LossPercent: 10,
+			},
+			wantState: streamState{
+				targetRate:  10,
+				lossPercent: 10,
+				status:      streamRunning,
+			},
+		},
+		{
+			name: "turn packet loss off",
+			initialState: streamState{
+				targetRate:  10,
+				lossPercent: 10,
+				status:      streamRunning,
+			},
+			event: scenario.Event{
+				Action:      scenario.ActionSetLoss,
+				LossPercent: 0,
+			},
+			wantState: streamState{
+				targetRate:  10,
+				lossPercent: 0,
+				status:      streamRunning,
+			},
+		},
+		{
+			name: "reject negative packet loss",
+			initialState: streamState{
+				targetRate: 10,
+				status:     streamRunning,
+			},
+			event: scenario.Event{
+				Action:      scenario.ActionSetLoss,
+				LossPercent: -1,
+			},
+			wantState: streamState{
+				targetRate: 10,
+				status:     streamRunning,
+			},
+			wantErr: true,
+		},
+		{
+			name: "reject packet loss above 100",
+			initialState: streamState{
+				targetRate: 10,
+				status:     streamRunning,
+			},
+			event: scenario.Event{
+				Action:      scenario.ActionSetLoss,
+				LossPercent: 101,
+			},
+			wantState: streamState{
+				targetRate: 10,
+				status:     streamRunning,
+			},
+			wantErr: true,
+		},
+		{
 			name: "stop stream",
 			initialState: streamState{
 				targetRate: 10,

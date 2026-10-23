@@ -1,6 +1,9 @@
 package scenario
 
-import "testing"
+import (
+	"math"
+	"testing"
+)
 
 func TestEventValidateActionsWithoutRates(t *testing.T) {
 	actions := []Action{
@@ -57,6 +60,58 @@ func TestEventValidateSetRate(t *testing.T) {
 			err := event.Validate()
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("Event.Validate() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestEventValidateSetLoss(t *testing.T) {
+	tests := []struct {
+		name        string
+		lossPercent float64
+		wantErr     bool
+	}{
+		{name: "zero disables loss"},
+		{name: "partial loss", lossPercent: 10},
+		{name: "complete loss", lossPercent: 100},
+		{name: "negative loss", lossPercent: -1, wantErr: true},
+		{name: "loss above 100", lossPercent: 101, wantErr: true},
+		{name: "not a number", lossPercent: math.NaN(), wantErr: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			event := Event{
+				Stream:      "telemetry",
+				Action:      ActionSetLoss,
+				LossPercent: tt.lossPercent,
+			}
+
+			err := event.Validate()
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("Event.Validate() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestEventValidateActionsWithoutLoss(t *testing.T) {
+	actions := []Action{
+		ActionPause,
+		ActionResume,
+		ActionStop,
+	}
+
+	for _, action := range actions {
+		t.Run(string(action), func(t *testing.T) {
+			event := Event{
+				Stream:      "telemetry",
+				Action:      action,
+				LossPercent: 10,
+			}
+
+			if err := event.Validate(); err == nil {
+				t.Fatalf("Event.Validate() accepted loss percent for action %q", action)
 			}
 		})
 	}
