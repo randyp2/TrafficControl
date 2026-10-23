@@ -2,7 +2,8 @@ package engine
 
 import (
 	"context"
-	"fmt"
+	"io"
+	"log"
 	"sort"
 	"time"
 
@@ -14,7 +15,12 @@ func scheduleEvents(
 	start time.Time,
 	events []scenario.Event,
 	eventChannels map[string]chan scenario.Event,
+	debugLogger *log.Logger,
 ) error {
+	if debugLogger == nil {
+		debugLogger = log.New(io.Discard, "", 0)
+	}
+
 	// Copy to not mutate original events slice
 	scheduled := append([]scenario.Event(nil), events...)
 
@@ -26,11 +32,11 @@ func scheduleEvents(
 	for _, event := range scheduled {
 		// Calculate time between now and target time
 		timeLeft := time.Until(start.Add(event.At))
-		fmt.Printf("[SCHEDULER] Seconds until event is (%.2fs s)\n", timeLeft.Seconds())
+		debugLogger.Printf("[SCHEDULER] Seconds until event is (%.2fs)\n", timeLeft.Seconds())
 
 		elapsed := time.Since(start)
 
-		fmt.Printf(
+		debugLogger.Printf(
 			"[SCHEDULER] elapsed: %s | time left: %s\n",
 			elapsed.Truncate(time.Millisecond),
 			timeLeft.Truncate(time.Millisecond),
@@ -41,7 +47,7 @@ func scheduleEvents(
 			// Create non blocking timer
 			timer := time.NewTimer(timeLeft)
 
-			fmt.Printf(
+			debugLogger.Printf(
 				"[SCHEDULER] waiting for event %q at %s\n",
 				event.Action,
 				event.At,
@@ -50,11 +56,11 @@ func scheduleEvents(
 			select {
 			case <-ctx.Done():
 				timer.Stop()
-				fmt.Printf("[SCHEDULER] context cancelled: %v\n", ctx.Err())
+				debugLogger.Printf("[SCHEDULER] context cancelled: %v\n", ctx.Err())
 				return nil
 
 			case <-timer.C:
-				fmt.Printf(
+				debugLogger.Printf(
 					"[SCHEDULER] timer fired for %q at elapsed=%s\n",
 					event.Action,
 					time.Since(start).Truncate(time.Millisecond),
@@ -62,7 +68,7 @@ func scheduleEvents(
 			}
 		}
 
-		fmt.Printf(
+		debugLogger.Printf(
 			"[SCHEDULER] sending %q to stream %q\n",
 			event.Action,
 			event.Stream,
@@ -71,12 +77,12 @@ func scheduleEvents(
 		// Time to send event
 		select {
 		case <-ctx.Done():
-			fmt.Printf("[SCHEDULER] canceled before event send\n")
+			debugLogger.Printf("[SCHEDULER] canceled before event send\n")
 			return nil
 
 		case eventChannels[event.Stream] <- event:
 			// Write to the respective event channel when the recieving end is ready to read
-			fmt.Printf(
+			debugLogger.Printf(
 				"[SCHEDULER] sent %q to stream %q\n",
 				event.Action,
 				event.Stream,

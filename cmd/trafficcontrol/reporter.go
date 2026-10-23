@@ -22,131 +22,143 @@ type consoleReporter struct {
 	mu      sync.Mutex
 	output  io.Writer
 	samples map[string]rateSample
+	color   bool
+	header  bool
 }
 
 func newConsoleReporter(output io.Writer) *consoleReporter {
 	return &consoleReporter{
 		output:  output,
 		samples: make(map[string]rateSample),
+		color:   consoleColor(output),
 	}
 }
 
+// Report writes one complete update so other streams cannot split its lines.
 func (r *consoleReporter) Report(update engine.StreamUpdate) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
 	snapshot := update.Snapshot
-	fmt.Fprintf(
-		r.output,
-		"[%s: %s]",
-		strings.ToUpper(string(update.Kind)),
-		snapshot.Name,
-	)
+	var output strings.Builder
+	elapsed := max(snapshot.CapturedAt.Sub(snapshot.StartedAt), 0).Seconds()
+	if update.Kind != engine.UpdateSnapshot {
+		color := colorCyan
+		switch update.Kind {
+		case engine.UpdateStarted, engine.UpdateResumed, engine.UpdateStopped:
+			color = colorGreen
+		case engine.UpdatePaused, engine.UpdateCanceled, engine.UpdateLossChanged:
+			color = colorYellow
+		case engine.UpdateFailed:
+			color = colorRed
+		}
+		label := fmt.Sprintf("[%s: %s]", strings.ToUpper(string(update.Kind)), snapshot.Name)
+		fmt.Fprintf(&output, "%7.2fs %s ", elapsed, colorize(label, color, r.color))
+	}
 
 	switch update.Kind {
 	case engine.UpdateStarted:
 		r.rememberSample(update.Snapshot)
 
 		fmt.Fprintf(
-			r.output,
-			" rate=%d pkt/s\n",
+			&output,
+			"target=%d packets/s\n",
 			snapshot.TargetRate,
 		)
 
 	case engine.UpdateSnapshot:
 		generatedRate, sentRate := r.actualRates(snapshot)
+		if !r.header {
+			output.WriteString("\nRates: packets/s | DROPPED: total intentional drops | LOSS: current setting\n")
+			columns := fmt.Sprintf("%8s %-16s %-8s %10s %10s %10s %9s %7s %9s\n",
+				"TIME", "STREAM", "STATUS", "TARGET/s", "GEN/s", "SENT/s", "DROPPED", "LOSS %", "LATENCY")
+			output.WriteString(colorize(columns, colorCyan, r.color))
+			r.header = true
+		}
 
 		fmt.Fprintf(
-			r.output,
-			" status=%s target=%d packets/s generated_rate=%.1f packets/s actual=%.1f sends/s sends=%d bytes=%d generated=%d dropped=%d loss_percent=%.2f observed_loss_percent=%.2f\n",
+			&output,
+			"%7.2fs %-16s %-8s %10d %10.1f %10.1f %9d %7.2f %9s\n",
+			elapsed,
+			snapshot.Name,
 			snapshot.Status,
 			snapshot.TargetRate,
 			generatedRate,
 			sentRate,
-			snapshot.PacketsSent,
-			snapshot.BytesSent,
-			snapshot.PacketsGenerated,
 			snapshot.PacketsDropped,
 			snapshot.LossPercent,
-			observedLossPercent(snapshot),
+			snapshot.Latency,
 		)
 
 	case engine.UpdateRateChanged:
 		fmt.Fprintf(
-			r.output,
-			" rate=%d pkt/s status=%s\n",
+			&output,
+			"target=%d packets/s status=%s\n",
 			snapshot.TargetRate,
 			snapshot.Status,
 		)
 
 	case engine.UpdateLatencyChanged:
 		fmt.Fprintf(
-			r.output,
-			" latency=%s status=%s\n",
+			&output,
+			"latency=%s status=%s\n",
 			snapshot.Latency,
 			snapshot.Status,
 		)
 
 	case engine.UpdateLossChanged:
 		fmt.Fprintf(
-			r.output,
-			" loss_percent=%.2f status=%s\n",
+			&output,
+			"loss=%.2f%% status=%s\n",
 			snapshot.LossPercent,
 			snapshot.Status,
 		)
 
 	case engine.UpdatePaused:
 		fmt.Fprintf(
-			r.output,
-			" packets=%d bytes=%d\n",
+			&output,
+			"sent=%d bytes=%d\n",
 			snapshot.PacketsSent,
 			snapshot.BytesSent,
 		)
 
 	case engine.UpdateResumed:
 		fmt.Fprintf(
-			r.output,
-			" rate=%d pkt/s\n",
+			&output,
+			"target=%d packets/s\n",
 			snapshot.TargetRate,
 		)
 
-	case engine.UpdateStopped:
+	case engine.UpdateStopped, engine.UpdateCanceled:
 		fmt.Fprintf(
-			r.output,
-			" packets=%d bytes=%d\n",
+			&output,
+			"sent=%d bytes=%d\n",
 			snapshot.PacketsSent,
 			snapshot.BytesSent,
 		)
-		r.writeSummary(update)
-
-	case engine.UpdateCanceled:
-		fmt.Fprintf(
-			r.output,
-			" packets=%d bytes=%d\n",
-			snapshot.PacketsSent,
-			snapshot.BytesSent,
-		)
-		r.writeSummary(update)
+		r.writeSummary(&output, update)
 
 	case engine.UpdateFailed:
 		fmt.Fprintf(
-			r.output,
-			" error=%q packets=%d bytes=%d\n",
+			&output,
+			"error=%q sent=%d bytes=%d\n",
 			snapshot.LastError,
 			snapshot.PacketsSent,
 			snapshot.BytesSent,
 		)
+		r.writeSummary(&output, update)
 
 	default:
 		fmt.Fprintf(
-			r.output,
-			" status=%s\n",
+			&output,
+			"status=%s\n",
 			snapshot.Status,
 		)
 	}
+	io.WriteString(r.output, output.String())
 }
 
-func (r *consoleReporter) writeSummary(update engine.StreamUpdate) {
+func (r *consoleReporter) writeSummary(output io.Writer, update engine.StreamUpdate) {
 	snapshot := update.Snapshot
 	duration := snapshot.CapturedAt.Sub(snapshot.StartedAt)
 	duration = max(duration, 0)
@@ -158,20 +170,25 @@ func (r *consoleReporter) writeSummary(update engine.StreamUpdate) {
 	}
 
 	fmt.Fprintf(
-		r.output,
-		"[SUMMARY: %s] reason=%s duration=%.3fs target=%d packets/s packets=%d bytes=%d average=%.1f packets/s generated=%d dropped=%d average_generated=%.1f packets/s loss_percent=%.2f observed_loss_percent=%.2f\n",
-		snapshot.Name,
-		update.Kind,
+		output,
+		"\n%s  duration=%.3fs reason=%s\n"+
+			"  Generated: %-12d Sent: %-12d Dropped: %d\n"+
+			"  Average generation: %.1f/s | Average sending: %.1f/s\n"+
+			"  Target: %d/s | Latency: %s | Configured loss: %.2f%%\n"+
+			"  Intentional drops across entire run: %.2f%% | Bytes sent: %d\n\n",
+		colorize(fmt.Sprintf("[SUMMARY: %s]", snapshot.Name), colorCyan, r.color),
 		duration.Seconds(),
-		snapshot.TargetRate,
-		snapshot.PacketsSent,
-		snapshot.BytesSent,
-		averageRate,
+		update.Kind,
 		snapshot.PacketsGenerated,
+		snapshot.PacketsSent,
 		snapshot.PacketsDropped,
 		averageGeneratedRate,
+		averageRate,
+		snapshot.TargetRate,
+		snapshot.Latency,
 		snapshot.LossPercent,
 		observedLossPercent(snapshot),
+		snapshot.BytesSent,
 	)
 }
 

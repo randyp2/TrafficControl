@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"os/signal"
+	"strings"
 	"sync"
 	"time"
 
@@ -26,6 +27,8 @@ type receiverConsoleReporter struct {
 	mu       sync.Mutex
 	output   io.Writer
 	previous *receiverSample
+	color    bool
+	header   bool
 }
 
 var _ receiver.Reporter = (*receiverConsoleReporter)(nil)
@@ -33,6 +36,7 @@ var _ receiver.Reporter = (*receiverConsoleReporter)(nil)
 func newReceiverConsoleReporter(output io.Writer) *receiverConsoleReporter {
 	return &receiverConsoleReporter{
 		output: output,
+		color:  consoleColor(output),
 	}
 }
 
@@ -66,15 +70,19 @@ func (r *receiverConsoleReporter) Report(snapshot receiver.Snapshot) {
 		bytesPerSecond = float64(bytes) / elapsed
 	}
 
-	kind := "RECEIVER"
-	if snapshot.Final {
-		kind = "RECEIVER_STOPPED"
+	var output strings.Builder
+	if !r.header {
+		output.WriteString("\nUDP receiver | Rates measured over each reporting interval\n")
+		columns := fmt.Sprintf("%8s %-22s %12s %12s %12s %12s\n",
+			"TIME", "ADDRESS", "RECEIVED/s", "BYTES/s", "DATAGRAMS", "BYTES")
+		output.WriteString(colorize(columns, colorCyan, r.color))
+		r.header = true
 	}
 
 	fmt.Fprintf(
-		r.output,
-		"[%s: udp] address=%s actual=%.1f datagrams/s bytes=%.1f/s total_datagrams=%d total_bytes=%d\n",
-		kind,
+		&output,
+		"%7.2fs %-22s %12.1f %12.1f %12d %12d\n",
+		max(snapshot.CapturedAt.Sub(snapshot.StartedAt), 0).Seconds(),
 		snapshot.Address,
 		datagramsPerSecond,
 		bytesPerSecond,
@@ -84,13 +92,15 @@ func (r *receiverConsoleReporter) Report(snapshot receiver.Snapshot) {
 
 	if snapshot.Final {
 		fmt.Fprintf(
-			r.output,
-			"[SUMMARY: udp] address=%s datagrams=%d bytes=%d\n",
+			&output,
+			"\n%s %s\n  Received: %d datagrams | Bytes: %d\n\n",
+			colorize("[SUMMARY: udp]", colorCyan, r.color),
 			snapshot.Address,
 			snapshot.DatagramsReceived,
 			snapshot.BytesReceived,
 		)
 	}
+	io.WriteString(r.output, output.String())
 
 	r.previous = &receiverSample{
 		capturedAt: snapshot.CapturedAt,
@@ -150,7 +160,8 @@ func listenCommand(args []string) error {
 
 	fmt.Fprintf(
 		os.Stdout,
-		"[LISTENING: udp] address=%s\n",
+		"%s address=%s\n",
+		colorize("[LISTENING: udp]", colorGreen, consoleColor(os.Stdout)),
 		udpReceiver.Address(),
 	)
 

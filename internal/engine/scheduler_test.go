@@ -1,13 +1,42 @@
 package engine
 
 import (
+	"bytes"
 	"context"
+	"log"
 	"net"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/randyp2/trafficcontrol/internal/scenario"
 )
+
+func TestScheduleEventsLogsDiagnostics(t *testing.T) {
+	var output bytes.Buffer
+	events := make(chan scenario.Event, 1)
+	want := scenario.Event{
+		At:     time.Millisecond,
+		Stream: "telemetry",
+		Action: scenario.ActionStop,
+	}
+	if err := scheduleEvents(context.Background(), time.Now(), []scenario.Event{want},
+		map[string]chan scenario.Event{"telemetry": events}, log.New(&output, "", 0)); err != nil {
+		t.Fatal(err)
+	}
+	if got := <-events; got != want {
+		t.Fatalf("event = %#v, want %#v", got, want)
+	}
+	for _, want := range []string{
+		"[SCHEDULER] elapsed:",
+		`[SCHEDULER] sending "stop" to stream "telemetry"`,
+		`[SCHEDULER] sent "stop" to stream "telemetry"`,
+	} {
+		if !strings.Contains(output.String(), want) {
+			t.Fatalf("diagnostics = %q, missing %q", output.String(), want)
+		}
+	}
+}
 
 func TestScheduleEventsRoutesToCorrectStream(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
@@ -33,6 +62,7 @@ func TestScheduleEventsRoutesToCorrectStream(t *testing.T) {
 			time.Now(),
 			[]scenario.Event{want},
 			channels,
+			nil,
 		)
 	}()
 
@@ -98,7 +128,7 @@ func TestRunDeliversScheduledStop(t *testing.T) {
 
 	done := make(chan error, 1)
 	go func() {
-		done <- Run(ctx, s, nil)
+		done <- Run(ctx, s, nil, nil)
 	}()
 
 	select {

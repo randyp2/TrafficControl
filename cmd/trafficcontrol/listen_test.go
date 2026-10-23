@@ -24,8 +24,9 @@ func TestReceiverConsoleReporterFormatsSnapshots(t *testing.T) {
 		CapturedAt:        startedAt.Add(time.Second),
 	})
 
-	want := "[RECEIVER: udp] address=127.0.0.1:5000 actual=10.0 datagrams/s bytes=30.0/s total_datagrams=10 total_bytes=30\n"
-	if got := output.String(); got != want {
+	lines := strings.Split(strings.TrimSpace(output.String()), "\n")
+	want := "1.00s 127.0.0.1:5000 10.0 30.0 10 30"
+	if got := strings.Join(strings.Fields(lines[len(lines)-1]), " "); got != want {
 		t.Fatalf("output = %q, want %q", got, want)
 	}
 
@@ -41,9 +42,8 @@ func TestReceiverConsoleReporterFormatsSnapshots(t *testing.T) {
 		Final:             true,
 	})
 
-	want = "[RECEIVER_STOPPED: udp] address=127.0.0.1:5000 actual=8.0 datagrams/s bytes=24.0/s total_datagrams=18 total_bytes=54\n" +
-		"[SUMMARY: udp] address=127.0.0.1:5000 datagrams=18 bytes=54\n"
-	if got := output.String(); got != want {
+	want = "2.00s 127.0.0.1:5000 8.0 24.0 18 54 [SUMMARY: udp] 127.0.0.1:5000 Received: 18 datagrams | Bytes: 54"
+	if got := strings.Join(strings.Fields(output.String()), " "); got != want {
 		t.Fatalf("output = %q, want %q", got, want)
 	}
 }

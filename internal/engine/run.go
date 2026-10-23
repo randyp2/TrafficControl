@@ -2,15 +2,18 @@ package engine
 
 import (
 	"context"
+	"log"
 	"time"
 
 	"github.com/randyp2/trafficcontrol/internal/scenario"
 )
 
+// Run executes all streams and scheduled events. A nil debugLogger disables diagnostics.
 func Run(
 	ctx context.Context,
 	s scenario.Scenario,
 	reporter Reporter,
+	debugLogger *log.Logger,
 ) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -49,7 +52,7 @@ func Run(
 		}(stream, events)
 	}
 
-	go scheduleEvents(ctx, start, s.Events, eventChannels)
+	go scheduleEvents(ctx, start, s.Events, eventChannels, debugLogger)
 
 	var firstErr error
 	for range s.Streams {

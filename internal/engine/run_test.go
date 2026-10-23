@@ -59,7 +59,7 @@ func TestRunMultipleStreams(t *testing.T) {
 	done := make(chan error, 1)
 
 	go func() {
-		done <- Run(ctx, s, nil)
+		done <- Run(ctx, s, nil, nil)
 	}()
 
 	buffer1 := make([]byte, 1024)

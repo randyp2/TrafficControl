@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"strings"
 	"testing"
 	"time"
 
@@ -32,54 +33,52 @@ func TestConsoleReporterFormatsUpdates(t *testing.T) {
 		{
 			name: "started",
 			kind: engine.UpdateStarted,
-			want: "[STARTED: telemetry] rate=25 pkt/s\n",
+			want: "   2.00s [STARTED: telemetry] target=25 packets/s",
 		},
 		{
 			name: "snapshot",
 			kind: engine.UpdateSnapshot,
-			want: "[SNAPSHOT: telemetry] status=running target=25 packets/s generated_rate=0.0 packets/s actual=0.0 sends/s sends=10 bytes=50 generated=20 dropped=10 loss_percent=50.00 observed_loss_percent=50.00\n",
+			want: "2.00s telemetry running 25 0.0 0.0 10 50.00 0s",
 		},
 		{
 			name: "rate changed",
 			kind: engine.UpdateRateChanged,
-			want: "[RATE_CHANGED: telemetry] rate=25 pkt/s status=running\n",
+			want: "   2.00s [RATE_CHANGED: telemetry] target=25 packets/s status=running",
 		},
 		{
 			name: "loss changed",
 			kind: engine.UpdateLossChanged,
-			want: "[PACKET_LOSS_CHANGED: telemetry] loss_percent=50.00 status=running\n",
+			want: "   2.00s [PACKET_LOSS_CHANGED: telemetry] loss=50.00% status=running",
 		},
 		{
 			name: "paused",
 			kind: engine.UpdatePaused,
-			want: "[PAUSED: telemetry] packets=10 bytes=50\n",
+			want: "   2.00s [PAUSED: telemetry] sent=10 bytes=50",
 		},
 		{
 			name: "resumed",
 			kind: engine.UpdateResumed,
-			want: "[RESUMED: telemetry] rate=25 pkt/s\n",
+			want: "   2.00s [RESUMED: telemetry] target=25 packets/s",
 		},
 		{
 			name: "stopped",
 			kind: engine.UpdateStopped,
-			want: "[STOPPED: telemetry] packets=10 bytes=50\n" +
-				"[SUMMARY: telemetry] reason=stopped duration=2.000s target=25 packets/s packets=10 bytes=50 average=5.0 packets/s generated=20 dropped=10 average_generated=10.0 packets/s loss_percent=50.00 observed_loss_percent=50.00\n",
+			want: "   2.00s [STOPPED: telemetry] sent=10 bytes=50",
 		},
 		{
 			name: "canceled",
 			kind: engine.UpdateCanceled,
-			want: "[CANCELED: telemetry] packets=10 bytes=50\n" +
-				"[SUMMARY: telemetry] reason=canceled duration=2.000s target=25 packets/s packets=10 bytes=50 average=5.0 packets/s generated=20 dropped=10 average_generated=10.0 packets/s loss_percent=50.00 observed_loss_percent=50.00\n",
+			want: "   2.00s [CANCELED: telemetry] sent=10 bytes=50",
 		},
 		{
 			name: "failed",
 			kind: engine.UpdateFailed,
-			want: "[FAILED: telemetry] error=\"send failed\" packets=10 bytes=50\n",
+			want: "   2.00s [FAILED: telemetry] error=\"send failed\" sent=10 bytes=50",
 		},
 		{
 			name: "unknown",
 			kind: engine.UpdateKind("unknown"),
-			want: "[UNKNOWN: telemetry] status=running\n",
+			want: "   2.00s [UNKNOWN: telemetry] status=running",
 		},
 	}
 
@@ -93,7 +92,12 @@ func TestConsoleReporterFormatsUpdates(t *testing.T) {
 				Snapshot: snapshot,
 			})
 
-			if got := output.String(); got != tt.want {
+			got := strings.SplitN(output.String(), "\n", 2)[0]
+			if tt.kind == engine.UpdateSnapshot {
+				lines := strings.Split(strings.TrimSpace(output.String()), "\n")
+				got = strings.Join(strings.Fields(lines[len(lines)-1]), " ")
+			}
+			if got != tt.want {
 				t.Fatalf("output = %q, want %q", got, tt.want)
 			}
 		})
@@ -119,10 +123,19 @@ func TestConsoleReporterFormatsBenchmarkSummary(t *testing.T) {
 		},
 	})
 
-	want := "[STOPPED: benchmark] packets=499847 bytes=4498623\n" +
-		"[SUMMARY: benchmark] reason=stopped duration=10.000s target=50000 packets/s packets=499847 bytes=4498623 average=49984.7 packets/s generated=499847 dropped=0 average_generated=49984.7 packets/s loss_percent=0.00 observed_loss_percent=0.00\n"
-	if got := output.String(); got != want {
-		t.Fatalf("output = %q, want %q", got, want)
+	for _, want := range []string{
+		"[STOPPED: benchmark] sent=499847 bytes=4498623",
+		"[SUMMARY: benchmark]  duration=10.000s reason=stopped",
+		"Generated: 499847",
+		"Sent: 499847",
+		"Dropped: 0",
+		"Average generation: 49984.7/s | Average sending: 49984.7/s",
+		"Target: 50000/s | Latency: 0s | Configured loss: 0.00%",
+		"Intentional drops across entire run: 0.00% | Bytes sent: 4498623",
+	} {
+		if !strings.Contains(output.String(), want) {
+			t.Fatalf("output = %q, missing %q", output.String(), want)
+		}
 	}
 }
 
@@ -148,8 +161,9 @@ func TestConsoleReporterReportsGenerationAndSendRates(t *testing.T) {
 	output.Reset()
 	reporter.Report(engine.StreamUpdate{Kind: engine.UpdateSnapshot, Snapshot: snapshot})
 
-	want := "[SNAPSHOT: telemetry] status=running target=1000 packets/s generated_rate=1000.0 packets/s actual=900.0 sends/s sends=900 bytes=4500 generated=1000 dropped=100 loss_percent=10.00 observed_loss_percent=10.00\n"
-	if got := output.String(); got != want {
+	want := "1.00s telemetry running 1000 1000.0 900.0 100 10.00 0s"
+	lines := strings.Split(strings.TrimSpace(output.String()), "\n")
+	if got := strings.Join(strings.Fields(lines[len(lines)-1]), " "); got != want {
 		t.Fatalf("output = %q, want %q", got, want)
 	}
 
@@ -164,9 +178,20 @@ func TestConsoleReporterReportsGenerationAndSendRates(t *testing.T) {
 	output.Reset()
 	reporter.Report(engine.StreamUpdate{Kind: engine.UpdateSnapshot, Snapshot: snapshot})
 
-	want = "[SNAPSHOT: telemetry] status=running target=1000 packets/s generated_rate=1000.0 packets/s actual=1000.0 sends/s sends=1900 bytes=9500 generated=2000 dropped=100 loss_percent=0.00 observed_loss_percent=5.00\n"
-	if got := output.String(); got != want {
+	want = "2.00s telemetry running 1000 1000.0 1000.0 100 0.00 0s"
+	if got := strings.Join(strings.Fields(output.String()), " "); got != want {
 		t.Fatalf("output after disabling loss = %q, want %q", got, want)
+	}
+
+	output.Reset()
+	reporter.Report(engine.StreamUpdate{Kind: engine.UpdateStopped, Snapshot: snapshot})
+	for _, want := range []string{
+		"Generated: 2000", "Sent: 1900", "Dropped: 100",
+		"Configured loss: 0.00%", "Intentional drops across entire run: 5.00%",
+	} {
+		if !strings.Contains(output.String(), want) {
+			t.Fatalf("summary = %q, missing %q", output.String(), want)
+		}
 	}
 }
 
@@ -211,9 +236,14 @@ func TestConsoleReporterSummaryBeforeGeneration(t *testing.T) {
 	snapshot := engine.StreamSnapshot{Name: "telemetry"}
 	reporter.Report(engine.StreamUpdate{Kind: engine.UpdateCanceled, Snapshot: snapshot})
 
-	want := "[CANCELED: telemetry] packets=0 bytes=0\n" +
-		"[SUMMARY: telemetry] reason=canceled duration=0.000s target=0 packets/s packets=0 bytes=0 average=0.0 packets/s generated=0 dropped=0 average_generated=0.0 packets/s loss_percent=0.00 observed_loss_percent=0.00\n"
-	if got := output.String(); got != want {
-		t.Fatalf("output = %q, want %q", got, want)
+	for _, want := range []string{
+		"[CANCELED: telemetry] sent=0 bytes=0",
+		"duration=0.000s reason=canceled",
+		"Average generation: 0.0/s | Average sending: 0.0/s",
+		"Intentional drops across entire run: 0.00%",
+	} {
+		if !strings.Contains(output.String(), want) {
+			t.Fatalf("output = %q, missing %q", output.String(), want)
+		}
 	}
 }
