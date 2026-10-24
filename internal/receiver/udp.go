@@ -9,8 +9,7 @@ import (
 )
 
 const (
-	defaultReportInterval = time.Second
-	maxUDPDatagramSize    = 64 * 1024
+	maxUDPDatagramSize = 64 * 1024
 )
 
 // UDPReceiver receives and counts UDP datagrams.
@@ -63,6 +62,7 @@ func (r *UDPReceiver) Run(
 
 	stopReporting := startReporting(
 		ctx,
+		ProtocolUDP,
 		address,
 		startedAt,
 		r.reportInterval,
@@ -106,6 +106,7 @@ func (r *UDPReceiver) Run(
 	if reporter != nil {
 		reporter.Report(
 			totals.snapshot(
+				ProtocolUDP,
 				address,
 				startedAt,
 				time.Now(),
@@ -115,48 +116,4 @@ func (r *UDPReceiver) Run(
 	}
 
 	return runErr
-}
-
-// startReporing reports periodic snapshots returns a function to stop reporting loop
-func startReporting(
-	ctx context.Context,
-	address string,
-	startedAt time.Time,
-	interval time.Duration,
-	totals *counters,
-	reporter Reporter,
-) func() {
-	if reporter == nil {
-		return func() {}
-	}
-
-	reportCtx, cancel := context.WithCancel(ctx)
-	done := make(chan struct{}) // Empty channel used for graceful shutdown
-
-	// Background go routine to reporter snapshots
-	go func() {
-		// Clean up done (unblocks <-done operations)
-		defer close(done)
-
-		ticker := time.NewTicker(interval)
-		defer ticker.Stop()
-
-		for {
-			select {
-			case <-reportCtx.Done():
-				return
-
-			case <-ticker.C:
-				capturedAt := time.Now()
-				reporter.Report(
-					totals.snapshot(address, startedAt, capturedAt, false),
-				)
-			}
-		}
-	}()
-
-	return func() {
-		cancel() // Invokes close(done)
-		<-done   // Blocks until startReporting is fully cleaned up
-	}
 }

@@ -2,6 +2,7 @@ package engine
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math/rand"
 	"time"
@@ -12,6 +13,8 @@ import (
 )
 
 const snapshotInterval = time.Second
+
+var errScheduledStop = errors.New("scheduled stream stop")
 
 // *udp.Sender and *tcp.Sender satisfy this inteface implicitly
 // both implement Send([]byte) and Close()
@@ -28,13 +31,20 @@ func RunStream(
 	events <-chan scenario.Event,
 	reporter Reporter,
 ) error {
-	sender, err := newSender(stream)
+	sender, err := newSender(ctx, stream)
 	if err != nil {
+		if ctx.Err() != nil {
+			state := streamState{targetRate: stream.Rate, startedAt: time.Now()}
+			return cancelStream(ctx, &state, reporter, stream.Name)
+		}
 		return err
 	}
 
 	// Close socket at the end of function lifecycle
 	defer sender.Close()
+	// Closing the socket interrupts a write even while the stream loop is blocked.
+	stopClose := context.AfterFunc(ctx, func() { _ = sender.Close() })
+	defer stopClose()
 
 	now := time.Now()
 	sendPacer, err := newBoundedPacer(stream.Rate, now)
@@ -85,14 +95,7 @@ func RunStream(
 		select {
 		case <-ctx.Done():
 			// Cancel method invoked
-
-			canceledAt := time.Now()
-			state.status = streamStopped
-			state.updatedAt = canceledAt
-
-			emitUpdate(reporter, UpdateCanceled, state.snapshot(stream.Name, canceledAt))
-
-			return nil
+			return cancelStream(ctx, &state, reporter, stream.Name)
 
 		case <-sendPacer.C():
 			// Timed event from pacer occured
@@ -125,6 +128,9 @@ func RunStream(
 					&state,
 					stream.Name,
 				); err != nil {
+					if ctx.Err() != nil {
+						return cancelStream(ctx, &state, reporter, stream.Name)
+					}
 					return failStream(
 						&state,
 						reporter,
@@ -166,6 +172,9 @@ func RunStream(
 					&state,
 					stream.Name,
 				); err != nil {
+					if ctx.Err() != nil {
+						return cancelStream(ctx, &state, reporter, stream.Name)
+					}
 					return failStream(
 						&state,
 						reporter,
@@ -263,6 +272,18 @@ func RunStream(
 	}
 }
 
+func cancelStream(ctx context.Context, state *streamState, reporter Reporter, name string) error {
+	kind := UpdateCanceled
+	if errors.Is(context.Cause(ctx), errScheduledStop) {
+		kind = UpdateStopped
+	}
+	now := time.Now()
+	state.status = streamStopped
+	state.updatedAt = now
+	emitUpdate(reporter, kind, state.snapshot(name, now))
+	return nil
+}
+
 func sendPayload(
 	streamSender sender,
 	payload []byte,
@@ -311,12 +332,12 @@ func armReleaseTimer(
 
 // newSender is internal method that creates the sender based on the stream
 // configuration
-func newSender(stream scenario.Stream) (sender, error) {
+func newSender(ctx context.Context, stream scenario.Stream) (sender, error) {
 	switch stream.Protocol {
 	case scenario.ProtocolUDP:
 		return udp.Dial(stream.Target)
 	case scenario.ProtocolTCP:
-		return tcp.Dial(stream.Target)
+		return tcp.Dial(ctx, stream.Target)
 	default:
 		return nil, fmt.Errorf(
 			"unsupported protocol %q",

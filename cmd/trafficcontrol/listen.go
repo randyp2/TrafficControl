@@ -72,33 +72,47 @@ func (r *receiverConsoleReporter) Report(snapshot receiver.Snapshot) {
 
 	var output strings.Builder
 	if !r.header {
-		output.WriteString("\nUDP receiver | Rates measured over each reporting interval\n")
-		columns := fmt.Sprintf("%8s %-22s %12s %12s %12s %12s\n",
-			"TIME", "ADDRESS", "RECEIVED/s", "BYTES/s", "DATAGRAMS", "BYTES")
-		output.WriteString(colorize(columns, colorCyan, r.color))
+		fmt.Fprintf(&output, "\n%s receiver | Rates measured over each reporting interval\n", strings.ToUpper(string(snapshot.Protocol)))
+		var columns string
+		if snapshot.Protocol == receiver.ProtocolTCP {
+			columns = fmt.Sprintf("%8s %-22s %12s %12s %8s %8s %12s\n",
+				"TIME", "ADDRESS", "BYTES/s", "CONNECTIONS", "ACTIVE", "ERRORS", "BYTES")
+		} else {
+			columns = fmt.Sprintf("%8s %-22s %12s %12s %12s %12s\n",
+				"TIME", "ADDRESS", "RECEIVED/s", "BYTES/s", "DATAGRAMS", "BYTES")
+		}
+		output.WriteString(colorize(strings.TrimSuffix(columns, "\n"), colorCyan, r.color) + "\n")
 		r.header = true
 	}
 
-	fmt.Fprintf(
-		&output,
-		"%7.2fs %-22s %12.1f %12.1f %12d %12d\n",
-		max(snapshot.CapturedAt.Sub(snapshot.StartedAt), 0).Seconds(),
-		snapshot.Address,
-		datagramsPerSecond,
-		bytesPerSecond,
-		snapshot.DatagramsReceived,
-		snapshot.BytesReceived,
-	)
-
-	if snapshot.Final {
+	if snapshot.Protocol == receiver.ProtocolTCP {
+		fmt.Fprintf(&output, "%7.2fs %-22s %12.1f %12d %8d %8d %12d\n",
+			max(snapshot.CapturedAt.Sub(snapshot.StartedAt), 0).Seconds(),
+			snapshot.Address, bytesPerSecond, snapshot.ConnectionsAccepted,
+			snapshot.ActiveConnections, snapshot.ConnectionErrors, snapshot.BytesReceived)
+	} else {
 		fmt.Fprintf(
 			&output,
-			"\n%s %s\n  Received: %d datagrams | Bytes: %d\n\n",
-			colorize("[SUMMARY: udp]", colorCyan, r.color),
+			"%7.2fs %-22s %12.1f %12.1f %12d %12d\n",
+			max(snapshot.CapturedAt.Sub(snapshot.StartedAt), 0).Seconds(),
 			snapshot.Address,
+			datagramsPerSecond,
+			bytesPerSecond,
 			snapshot.DatagramsReceived,
 			snapshot.BytesReceived,
 		)
+	}
+
+	if snapshot.Final {
+		fmt.Fprintf(&output, "\n%s %s\n",
+			colorize(fmt.Sprintf("[SUMMARY: %s]", snapshot.Protocol), colorCyan, r.color), snapshot.Address)
+		if snapshot.Protocol == receiver.ProtocolTCP {
+			fmt.Fprintf(&output, "  Received: %d bytes | Connections: %d | Active: %d | Read errors: %d\n\n",
+				snapshot.BytesReceived, snapshot.ConnectionsAccepted, snapshot.ActiveConnections, snapshot.ConnectionErrors)
+		} else {
+			fmt.Fprintf(&output, "  Received: %d datagrams | Bytes: %d\n\n",
+				snapshot.DatagramsReceived, snapshot.BytesReceived)
+		}
 	}
 	io.WriteString(r.output, output.String())
 
@@ -121,7 +135,7 @@ func listenCommand(args []string) error {
 	protocol := flags.String(
 		"protocol",
 		"udp",
-		"protocol to receive",
+		"protocol to receive (udp or tcp)",
 	)
 
 	// "--address flag"
@@ -138,21 +152,23 @@ func listenCommand(args []string) error {
 	// --- Usage error
 	if flags.NArg() != 0 {
 		return fmt.Errorf(
-			"usage: trafficcontrol listen --protocol udp --address :5000",
+			"usage: trafficcontrol listen --protocol <udp|tcp> --address :5000",
 		)
 	}
 
-	if *protocol != string(receiver.ProtocolUDP) {
+	var trafficReceiver receiver.Receiver
+	var err error
+	switch receiver.Protocol(*protocol) {
+	case receiver.ProtocolUDP:
+		trafficReceiver, err = receiver.ListenUDP(*address, time.Second)
+	case receiver.ProtocolTCP:
+		trafficReceiver, err = receiver.ListenTCP(*address, time.Second)
+	default:
 		return fmt.Errorf(
 			"unsupported receiver protocol %q",
 			*protocol,
 		)
 	}
-
-	udpReceiver, err := receiver.ListenUDP(
-		*address,
-		time.Second,
-	)
 
 	if err != nil {
 		return err
@@ -161,8 +177,8 @@ func listenCommand(args []string) error {
 	fmt.Fprintf(
 		os.Stdout,
 		"%s address=%s\n",
-		colorize("[LISTENING: udp]", colorGreen, consoleColor(os.Stdout)),
-		udpReceiver.Address(),
+		colorize(fmt.Sprintf("[LISTENING: %s]", *protocol), colorGreen, consoleColor(os.Stdout)),
+		trafficReceiver.Address(),
 	)
 
 	ctx, stop := signal.NotifyContext(
@@ -173,5 +189,5 @@ func listenCommand(args []string) error {
 
 	reporter := newReceiverConsoleReporter(os.Stdout)
 
-	return udpReceiver.Run(ctx, reporter)
+	return trafficReceiver.Run(ctx, reporter)
 }

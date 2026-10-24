@@ -49,12 +49,59 @@ func TestReceiverConsoleReporterFormatsSnapshots(t *testing.T) {
 }
 
 func TestListenCommandRejectsUnsupportedProtocol(t *testing.T) {
-	err := listenCommand([]string{"--protocol", "tcp"})
+	err := listenCommand([]string{"--protocol", "sctp"})
 	if err == nil {
 		t.Fatal("listenCommand() error = nil, want an unsupported protocol error")
 	}
 
-	if !strings.Contains(err.Error(), `unsupported receiver protocol "tcp"`) {
+	if !strings.Contains(err.Error(), `unsupported receiver protocol "sctp"`) {
 		t.Fatalf("listenCommand() error = %q", err)
+	}
+}
+
+func TestListenCommandRoutesTCP(t *testing.T) {
+	err := listenCommand([]string{"--protocol", "tcp", "--address", "bad:address:format"})
+	if err == nil || !strings.Contains(err.Error(), "resolve TCP receiver address") {
+		t.Fatalf("listenCommand error = %v, want a TCP address validation error", err)
+	}
+}
+
+func TestReceiverConsoleReporterFormatsTCPBytes(t *testing.T) {
+	startedAt := time.Date(2026, time.October, 1, 12, 0, 0, 0, time.UTC)
+	for _, color := range []bool{false, true} {
+		var output bytes.Buffer
+		reporter := newReceiverConsoleReporter(&output)
+		reporter.color = color
+		snapshot := receiver.Snapshot{
+			Protocol: receiver.ProtocolTCP, Address: "127.0.0.1:6000",
+			BytesReceived: 100, ConnectionsAccepted: 2, ActiveConnections: 1,
+			StartedAt: startedAt, CapturedAt: startedAt.Add(time.Second),
+		}
+		reporter.Report(snapshot)
+		lines := strings.Split(strings.TrimSpace(output.String()), "\n")
+		want := "1.00s 127.0.0.1:6000 100.0 2 1 0 100"
+		if got := strings.Join(strings.Fields(lines[len(lines)-1]), " "); got != want {
+			t.Fatalf("TCP row = %q, want %q", got, want)
+		}
+		if strings.Contains(output.String(), "DATAGRAMS") {
+			t.Fatal("TCP output counts read calls as datagrams")
+		}
+		output.Reset()
+		snapshot.CapturedAt = startedAt.Add(2 * time.Second)
+		snapshot.BytesReceived = 180
+		snapshot.ActiveConnections = 0
+		snapshot.ConnectionErrors = 1
+		snapshot.Final = true
+		reporter.Report(snapshot)
+		for _, want := range []string{
+			"80.0", "[SUMMARY: tcp]", "Received: 180 bytes | Connections: 2 | Active: 0 | Read errors: 1",
+		} {
+			if !strings.Contains(output.String(), want) {
+				t.Fatalf("TCP summary = %q, missing %q", output.String(), want)
+			}
+		}
+		if strings.Contains(output.String(), "datagrams") {
+			t.Fatal("TCP summary reports datagrams")
+		}
 	}
 }

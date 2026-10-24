@@ -72,7 +72,7 @@ func (r *consoleReporter) Report(update engine.StreamUpdate) {
 			output.WriteString("\nRates: packets/s | DROPPED: total intentional drops | LOSS: current setting\n")
 			columns := fmt.Sprintf("%8s %-16s %-8s %10s %10s %10s %9s %7s %9s\n",
 				"TIME", "STREAM", "STATUS", "TARGET/s", "GEN/s", "SENT/s", "DROPPED", "LOSS %", "LATENCY")
-			output.WriteString(colorize(columns, colorCyan, r.color))
+			output.WriteString(colorize(strings.TrimSuffix(columns, "\n"), colorCyan, r.color) + "\n")
 			r.header = true
 		}
 

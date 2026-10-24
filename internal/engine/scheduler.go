@@ -16,6 +16,7 @@ func scheduleEvents(
 	events []scenario.Event,
 	eventChannels map[string]chan scenario.Event,
 	debugLogger *log.Logger,
+	stopStreams map[string]context.CancelCauseFunc,
 ) error {
 	if debugLogger == nil {
 		debugLogger = log.New(io.Discard, "", 0)
@@ -75,6 +76,16 @@ func scheduleEvents(
 		)
 
 		// Time to send event
+		if event.Action == scenario.ActionStop && stopStreams[event.Stream] != nil {
+			if ctx.Err() != nil {
+				return nil
+			}
+			// Interrupt blocked writes without waiting for the stream's event loop.
+			stopStreams[event.Stream](errScheduledStop)
+			debugLogger.Printf("[SCHEDULER] stopped stream %q\n", event.Stream)
+			continue
+		}
+
 		select {
 		case <-ctx.Done():
 			debugLogger.Printf("[SCHEDULER] canceled before event send\n")

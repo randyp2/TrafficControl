@@ -21,7 +21,7 @@ func TestScheduleEventsLogsDiagnostics(t *testing.T) {
 		Action: scenario.ActionStop,
 	}
 	if err := scheduleEvents(context.Background(), time.Now(), []scenario.Event{want},
-		map[string]chan scenario.Event{"telemetry": events}, log.New(&output, "", 0)); err != nil {
+		map[string]chan scenario.Event{"telemetry": events}, log.New(&output, "", 0), nil); err != nil {
 		t.Fatal(err)
 	}
 	if got := <-events; got != want {
@@ -62,6 +62,7 @@ func TestScheduleEventsRoutesToCorrectStream(t *testing.T) {
 			time.Now(),
 			[]scenario.Event{want},
 			channels,
+			nil,
 			nil,
 		)
 	}()

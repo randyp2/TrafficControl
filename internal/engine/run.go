@@ -27,6 +27,7 @@ func Run(
 		map[string]chan scenario.Event,
 		len(s.Streams),
 	)
+	stopStreams := make(map[string]context.CancelCauseFunc, len(s.Streams))
 
 	for _, stream := range s.Streams {
 		eventChannels[stream.Name] = make(
@@ -38,13 +39,16 @@ func Run(
 	start := time.Now()
 	for _, stream := range s.Streams {
 		events := eventChannels[stream.Name]
+		streamCtx, stop := context.WithCancelCause(ctx)
+		stopStreams[stream.Name] = stop
 
 		go func(
 			stream scenario.Stream,
 			events <-chan scenario.Event,
 		) {
+			defer stop(nil)
 			results <- RunStream(
-				ctx,
+				streamCtx,
 				stream,
 				events,
 				reporter,
@@ -52,7 +56,7 @@ func Run(
 		}(stream, events)
 	}
 
-	go scheduleEvents(ctx, start, s.Events, eventChannels, debugLogger)
+	go scheduleEvents(ctx, start, s.Events, eventChannels, debugLogger, stopStreams)
 
 	var firstErr error
 	for range s.Streams {

@@ -1,0 +1,13 @@
+name: tcp-basic
+
+streams:
+  - name: backend
+    protocol: tcp
+    target: 127.0.0.1:6000
+    rate: 1000
+    payload: tcp-smoke
+
+events:
+  - at: 5s
+    stream: backend
+    action: stop

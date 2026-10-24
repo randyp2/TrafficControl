@@ -26,6 +26,21 @@ go run ./cmd/trafficcontrol run --verbose examples/scenarios/loss/toggle.yaml
 
 In the rate table, `LOSS %` is the current configured probability. The summary's drop percentage covers the entire run. Generation and sending averages include paused time and are not measures of per-packet timing accuracy.
 
+## TCP
+
+Start a TCP listener, then run the example in another terminal:
+
+```bash
+go run ./cmd/trafficcontrol listen --protocol tcp --address 127.0.0.1:6000
+go run ./cmd/trafficcontrol run examples/scenarios/basic/tcp.yaml
+```
+
+The example stops after five seconds. Stop the listener with Ctrl-C to see its final totals. Compare sender bytes with receiver bytes: TCP is a byte stream, so receiver read counts cannot measure payload or packet counts. Receiver metrics show bytes/s, total bytes, total accepted connections, active connections, and read errors. Normal disconnects are not errors, and one failed connection does not stop the listener.
+
+TCP connection attempts have a five-second timeout, and each write has a two-second deadline. Ctrl-C and scheduled stop events interrupt blocked writes by closing the connection. An actual write timeout fails the stream; a partial payload may already have reached the peer. An immediate stop can discard delayed payloads and does not drain the receiver.
+
+Rate, latency, pause/resume, and loss decisions run before TCP writes. Loss skips generated application payloads; it does not simulate lost TCP segments, retransmissions, or congestion control.
+
 ## Performance
 
 The current local UDP baseline delivered every reported send at targets through 200,000 packets per second. Across five runs per target, median pacing error stayed at or below 0.0007% at 100k, 150k, and 200k, with 100% observed delivery.
