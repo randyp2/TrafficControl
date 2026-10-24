@@ -1,6 +1,6 @@
 # TrafficControl
 
-TrafficControl is a config-driven network traffic generator for exercising systems before real clients and production traffic are available. Scenarios can run multiple streams and schedule rate changes, pauses, resumes, and stops.
+TrafficControl is a config-driven UDP and TCP traffic generator for exercising systems before real clients and production traffic are available. Scenarios can run multiple streams and schedule rate changes, fixed latency, seeded loss, pauses, resumes, and stops.
 
 ## Quick start
 
@@ -43,6 +43,15 @@ Rate, latency, pause/resume, and loss decisions run before TCP writes. Loss skip
 
 ## Performance
 
-The current local UDP baseline delivered every reported send at targets through 200,000 packets per second. Across five runs per target, median pacing error stayed at or below 0.0007% at 100k, 150k, and 200k, with 100% observed delivery.
+Both protocols passed local loopback tests at targets through 200,000 payloads/s. The latest comparison used nine-byte payloads for ten seconds, with five runs per protocol at 100k, 150k, and 200k.
+
+| Protocol | Target | Median sent/s | Median pacing error | Observed delivery |
+| --- | ---: | ---: | ---: | ---: |
+| UDP | 200,000/s | 199,999.3 | 0.00185% | 100% of sent datagrams |
+| TCP | 200,000/s | 199,999.7 | 0.00355% | 100% of sent bytes |
+
+Pacing error compares total generated payloads with the configured duration; it is not a per-packet latency guarantee. TCP writes are application payloads, not TCP segments. These results describe small loopback workloads, not remote-network guarantees.
+
+Matching benchmark YAML files live under `examples/scenarios/benchmark/udp/` and `examples/scenarios/benchmark/tcp/`. For example, run `examples/scenarios/benchmark/tcp/100k.yaml` against the TCP listener above.
 
 See [docs/performance.md](docs/performance.md) for the benchmark method, results, and optimization plan.
