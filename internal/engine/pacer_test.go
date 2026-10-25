@@ -47,6 +47,20 @@ func TestIntervalForRate(t *testing.T) {
 	}
 }
 
+func TestBoundedPacerUsesSharedFirstDeadline(t *testing.T) {
+	startedAt := time.Now().Add(100 * time.Millisecond)
+	pacer := newTestPacer(t, 1000, startedAt)
+
+	select {
+	case firedAt := <-pacer.C():
+		if firedAt.Before(pacer.next) {
+			t.Fatalf("timer fired at %s before shared deadline %s", firedAt, pacer.next)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("timer did not fire at the shared deadline")
+	}
+}
+
 func TestBoundedPacerPreservesFractionalRate(t *testing.T) {
 	startedAt := time.Date(2026, time.October, 3, 12, 0, 0, 0, time.UTC)
 	const rate = 150000

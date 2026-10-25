@@ -138,7 +138,7 @@ func TestRunTCPCancellationInterruptsBlockedWrite(t *testing.T) {
 						Events: []scenario.Event{{At: 250 * time.Millisecond, Stream: stream.Name, Action: scenario.ActionStop}},
 					}, reporter, nil)
 				} else {
-					done <- RunStream(ctx, stream, events, reporter)
+					done <- RunStream(ctx, stream, events, reporter, nil, nil)
 				}
 			}()
 			peer, err := listener.AcceptTCP()
@@ -194,7 +194,7 @@ func TestRunTCPWithCanceledContext(t *testing.T) {
 	reporter := &channelReporter{updates: make(chan StreamUpdate, 2)}
 	if err := RunStream(ctx, scenario.Stream{
 		Name: "canceled", Protocol: scenario.ProtocolTCP, Target: "127.0.0.1:6000", Rate: 1,
-	}, nil, reporter); err != nil {
+	}, nil, reporter, nil, nil); err != nil {
 		t.Fatal(err)
 	}
 	if update := <-reporter.updates; update.Kind != UpdateCanceled {

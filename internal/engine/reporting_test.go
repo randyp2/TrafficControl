@@ -85,6 +85,8 @@ func TestRunStreamReportsStarted(t *testing.T) {
 			stream,
 			make(chan scenario.Event),
 			reporter,
+			nil,
+			nil,
 		)
 	}()
 
@@ -190,7 +192,7 @@ func TestRunStreamReportsSnapshotCounters(t *testing.T) {
 
 	done := make(chan error, 1)
 	go func() {
-		done <- RunStream(ctx, stream, make(chan scenario.Event), reporter)
+		done <- RunStream(ctx, stream, make(chan scenario.Event), reporter, nil, nil)
 	}()
 
 	select {
@@ -286,7 +288,7 @@ func TestRunStreamReportsEventTransitions(t *testing.T) {
 
 	done := make(chan error, 1)
 	go func() {
-		done <- RunStream(ctx, stream, events, reporter)
+		done <- RunStream(ctx, stream, events, reporter, nil, nil)
 	}()
 
 	started := waitForUpdate(t, reporter.updates, UpdateStarted)
@@ -401,6 +403,8 @@ func TestRunStreamReportsCancellation(t *testing.T) {
 			stream,
 			make(chan scenario.Event),
 			reporter,
+			nil,
+			nil,
 		)
 	}()
 
@@ -459,7 +463,7 @@ func TestRunStreamReportsFailure(t *testing.T) {
 
 	done := make(chan error, 1)
 	go func() {
-		done <- RunStream(ctx, stream, events, reporter)
+		done <- RunStream(ctx, stream, events, reporter, nil, nil)
 	}()
 
 	waitForUpdate(t, reporter.updates, UpdateStarted)

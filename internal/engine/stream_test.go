@@ -38,7 +38,7 @@ func TestRunStreamStopsOnContextCancel(t *testing.T) {
 	events := make(chan scenario.Event)
 	done := make(chan error, 1)
 	go func() {
-		done <- RunStream(ctx, stream, events, nil)
+		done <- RunStream(ctx, stream, events, nil, nil, nil)
 	}()
 
 	buffer := make([]byte, 1024)
@@ -85,7 +85,7 @@ func TestRunStreamPausesChangesRateAndResumes(t *testing.T) {
 	events := make(chan scenario.Event, 4)
 	done := make(chan error, 1)
 	go func() {
-		done <- RunStream(ctx, stream, events, nil)
+		done <- RunStream(ctx, stream, events, nil, nil, nil)
 	}()
 
 	waitForUDPPacket(t, listener, 2*time.Second)
@@ -145,7 +145,7 @@ func TestRunStreamDelaysPackets(t *testing.T) {
 
 	done := make(chan error, 1)
 	go func() {
-		done <- RunStream(ctx, stream, events, nil)
+		done <- RunStream(ctx, stream, events, nil, nil, nil)
 	}()
 
 	expectNoUDPPacket(t, listener, 150*time.Millisecond)
@@ -202,7 +202,7 @@ func TestRunStreamDropsAllPackets(t *testing.T) {
 
 	done := make(chan error, 1)
 	go func() {
-		done <- RunStream(ctx, stream, events, reporter)
+		done <- RunStream(ctx, stream, events, reporter, nil, nil)
 	}()
 
 	waitForUpdate(t, reporter.updates, UpdateStarted)
@@ -328,7 +328,7 @@ func TestLatencyPerformanceSmoke(t *testing.T) {
 
 	done := make(chan error, 1)
 	go func() {
-		done <- RunStream(ctx, stream, events, reporter)
+		done <- RunStream(ctx, stream, events, reporter, nil, nil)
 	}()
 
 	waitForUpdate(t, reporter.updates, UpdateStarted)

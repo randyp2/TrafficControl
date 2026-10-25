@@ -18,9 +18,15 @@ func Run(
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
+	streamCount := len(s.Streams)
 	// Bidirectional channel to read and write results to
 	// Initialize with buffer size so writer threads don't block
-	results := make(chan error, len(s.Streams))
+	results := make(chan error, streamCount)
+
+	// ready connections
+	ready := make(chan struct{}, streamCount)
+	// start timers for streams to use
+	starts := make(chan time.Time, streamCount)
 
 	// evenChannels maps a stream name onto an event channel
 	eventChannels := make(
@@ -36,7 +42,6 @@ func Run(
 		)
 	}
 
-	start := time.Now()
 	for _, stream := range s.Streams {
 		events := eventChannels[stream.Name]
 		streamCtx, stop := context.WithCancelCause(ctx)
@@ -47,25 +52,52 @@ func Run(
 			events <-chan scenario.Event,
 		) {
 			defer stop(nil)
+
 			results <- RunStream(
 				streamCtx,
 				stream,
 				events,
 				reporter,
+				ready,
+				starts,
 			)
 		}(stream, events)
 	}
 
-	go scheduleEvents(ctx, start, s.Events, eventChannels, debugLogger, stopStreams)
-
+	readyCount := 0
+	completedCount := 0
 	var firstErr error
-	for range s.Streams {
-		err := <-results
 
-		if err != nil && firstErr == nil {
-			firstErr = err
-			cancel()
+	for completedCount < streamCount {
+		select {
+		case <-ready:
+			readyCount++
+
+			if readyCount == streamCount && ctx.Err() == nil {
+				start := time.Now()
+
+				for range s.Streams {
+					starts <- start
+				}
+
+				go scheduleEvents(
+					ctx,
+					start,
+					s.Events,
+					eventChannels,
+					debugLogger,
+					stopStreams,
+				)
+			}
+		case err := <-results:
+			completedCount++
+
+			if err != nil && firstErr == nil {
+				firstErr = err
+				cancel()
+			}
 		}
+
 	}
 
 	return firstErr

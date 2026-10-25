@@ -45,7 +45,7 @@ func newBoundedPacer(
 	pacer.resetDeadline(startedAt)
 
 	pacer.timer = time.NewTimer(
-		pacer.next.Sub(startedAt),
+		max(time.Duration(0), time.Until(pacer.next)),
 	)
 
 	return pacer, nil

@@ -30,11 +30,17 @@ func RunStream(
 	stream scenario.Stream,
 	events <-chan scenario.Event,
 	reporter Reporter,
+	ready chan<- struct{},
+	starts <-chan time.Time,
 ) error {
 	sender, err := newSender(ctx, stream)
+
 	if err != nil {
 		if ctx.Err() != nil {
-			state := streamState{targetRate: stream.Rate, startedAt: time.Now()}
+			state := streamState{
+				targetRate: stream.Rate,
+				startedAt:  time.Now(),
+			}
 			return cancelStream(ctx, &state, reporter, stream.Name)
 		}
 		return err
@@ -42,15 +48,36 @@ func RunStream(
 
 	// Close socket at the end of function lifecycle
 	defer sender.Close()
+
 	// Closing the socket interrupts a write even while the stream loop is blocked.
 	stopClose := context.AfterFunc(ctx, func() { _ = sender.Close() })
 	defer stopClose()
 
-	now := time.Now()
-	sendPacer, err := newBoundedPacer(stream.Rate, now)
+	start := time.Now()
+	payload := []byte(stream.Payload)
+	lossRNG := rand.New(rand.NewSource(stream.Seed))
 
+	// Must stall until other stream connectinos are ready
+	if ready != nil {
+		// Connection and payload are all setup
+		ready <- struct{}{}
+
+		select {
+		case start = <-starts:
+			// Block until a timer is present
+
+		case <-ctx.Done():
+			state := streamState{
+				targetRate: stream.Rate,
+				startedAt:  time.Now(),
+			}
+
+			return cancelStream(ctx, &state, reporter, stream.Name)
+		}
+	}
+
+	sendPacer, err := newBoundedPacer(stream.Rate, start)
 	if err != nil {
-
 		return fmt.Errorf(
 			"[STREAM]: failed creating a pace for stream %q: %w\n",
 			stream.Name,
@@ -63,10 +90,10 @@ func RunStream(
 		targetRate: stream.Rate,
 		status:     streamRunning,
 
-		startedAt: now,
-		updatedAt: now,
+		startedAt: start,
+		updatedAt: start,
 	}
-	emitUpdate(reporter, UpdateStarted, state.snapshot(stream.Name, now))
+	emitUpdate(reporter, UpdateStarted, state.snapshot(stream.Name, start))
 
 	// Initialize reporter and snapshot channel to capture timed snapshots
 	var snapshotTicker *time.Ticker
@@ -89,8 +116,6 @@ func RunStream(
 		}
 	}()
 
-	payload := []byte(stream.Payload)
-	lossRNG := rand.New(rand.NewSource(stream.Seed))
 	for {
 		select {
 		case <-ctx.Done():
