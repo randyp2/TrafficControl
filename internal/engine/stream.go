@@ -56,6 +56,7 @@ func RunStream(
 	start := time.Now()
 	payload := []byte(stream.Payload)
 	lossRNG := rand.New(rand.NewSource(stream.Seed))
+	jitterRNG := rand.New(rand.NewSource((stream.Seed + 1)))
 
 	// Must stall until other stream connectinos are ready
 	if ready != nil {
@@ -125,10 +126,7 @@ func RunStream(
 		case <-sendPacer.C():
 			// Timed event from pacer occured
 			generatedAt := time.Now()
-			releaseAt := generatedAt.Add(state.latency)
-			batchSize := sendPacer.packetsDue(
-				generatedAt,
-			)
+			batchSize := sendPacer.packetsDue(generatedAt)
 
 			for range batchSize {
 				state.packetsGenerated++
@@ -142,6 +140,13 @@ func RunStream(
 
 				// Enqueue and forget
 				if state.latency > 0 {
+					delay := sampleDelay(
+						jitterRNG,
+						state.latency,
+						state.jitter,
+					)
+
+					releaseAt := generatedAt.Add(delay)
 					delayedPackets.Enqueue(payload, releaseAt)
 					continue
 				}
@@ -233,6 +238,7 @@ func RunStream(
 			previousState := state.status
 			previousRate := state.targetRate
 			previousLatency := state.latency
+			previousJitter := state.jitter
 			previousLoss := state.lossPercent
 
 			stop, err := handleEvent(sendPacer, event, &state)
@@ -249,6 +255,7 @@ func RunStream(
 			currentState := state.status
 			currentRate := state.targetRate
 			currentLatency := state.latency
+			currentJitter := state.jitter
 			currentLoss := state.lossPercent
 			eventTime := time.Now()
 
@@ -285,6 +292,12 @@ func RunStream(
 				state.updatedAt = eventTime
 
 				emitUpdate(reporter, UpdateLatencyChanged, state.snapshot(stream.Name, eventTime))
+			}
+
+			// Changed jitter
+			if previousJitter != currentJitter {
+				state.updatedAt = eventTime
+				emitUpdate(reporter, UpdateJitterChanged, state.snapshot(stream.Name, eventTime))
 			}
 
 			// Changed loss percent

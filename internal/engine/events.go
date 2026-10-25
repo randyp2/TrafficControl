@@ -8,6 +8,8 @@ import (
 	"github.com/randyp2/trafficcontrol/internal/scenario"
 )
 
+const maxDuration = time.Duration(1<<63 - 1)
+
 // handleEvent adjusts ticker based on action type and return true if action
 // was to stop
 func handleEvent(
@@ -50,7 +52,27 @@ func handleEvent(
 			)
 		}
 
+		if event.Latency < state.jitter {
+			return false, fmt.Errorf("latency %s cannot be less than active jitter %s", event.Latency, state.jitter)
+		}
+		if event.Latency > maxDuration-state.jitter {
+			return false, fmt.Errorf("latency plus jitter is too large")
+		}
+
 		state.latency = event.Latency
+		return false, nil
+
+	case scenario.ActionSetJitter:
+		if event.Jitter < 0 {
+			return false, fmt.Errorf("jitter cannot be negative: %s", event.Jitter)
+		}
+		if event.Jitter > state.latency {
+			return false, fmt.Errorf("jitter %s exceeds latency %s", event.Jitter, state.latency)
+		}
+		if state.latency > maxDuration-event.Jitter {
+			return false, fmt.Errorf("latency plus jitter is too large")
+		}
+		state.jitter = event.Jitter
 		return false, nil
 
 	case scenario.ActionSetLoss:

@@ -106,6 +106,9 @@ func (r *consoleReporter) Report(update engine.StreamUpdate) {
 			snapshot.Status,
 		)
 
+	case engine.UpdateJitterChanged:
+		fmt.Fprintf(&output, "jitter=+/- %s status=%s\n", snapshot.Jitter, snapshot.Status)
+
 	case engine.UpdateLossChanged:
 		fmt.Fprintf(
 			&output,

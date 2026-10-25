@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"sort"
 	"time"
 )
 
@@ -47,6 +48,31 @@ func (s Scenario) Validate() error {
 		}
 	}
 
+	// Validate delay settings in execution order without rearranging the input.
+	const maxDuration = time.Duration(1<<63 - 1)
+	ordered := append([]Event(nil), s.Events...)
+	sort.SliceStable(ordered, func(i, j int) bool { return ordered[i].At < ordered[j].At })
+	delays := make(map[string]struct{ latency, jitter time.Duration }, len(s.Streams))
+	for _, event := range ordered {
+		settings := delays[event.Stream]
+		switch event.Action {
+		case ActionSetLatency:
+			settings.latency = event.Latency
+		case ActionSetJitter:
+			settings.jitter = event.Jitter
+		default:
+			continue
+		}
+		if settings.jitter > settings.latency {
+			return fmt.Errorf("event at %s for stream %q: jitter %s exceeds latency %s",
+				event.At, event.Stream, settings.jitter, settings.latency)
+		}
+		if settings.latency > maxDuration-settings.jitter {
+			return fmt.Errorf("event at %s for stream %q: latency plus jitter is too large", event.At, event.Stream)
+		}
+		delays[event.Stream] = settings
+	}
+
 	return nil
 }
 
@@ -84,6 +110,10 @@ func (e Event) Validate() error {
 		return errors.New("event stream name cannot be empty\n")
 	}
 
+	if e.Action != ActionSetJitter && e.Jitter != 0 {
+		return fmt.Errorf("event action %q does not accept jitter", e.Action)
+	}
+
 	switch e.Action {
 	case ActionSetRate:
 		if e.Rate <= 0 {
@@ -114,6 +144,20 @@ func (e Event) Validate() error {
 
 		if e.LossPercent != 0 {
 			return fmt.Errorf("event action %q does not accept loss percent\n", e.Action)
+		}
+
+	case ActionSetJitter:
+		if e.Jitter < 0 {
+			return errors.New("event jitter cannot be negative")
+		}
+		if e.Rate != 0 {
+			return fmt.Errorf("event action %q does not accept rate", e.Action)
+		}
+		if e.Latency != 0 {
+			return fmt.Errorf("event action %q does not accept latency", e.Action)
+		}
+		if e.LossPercent != 0 {
+			return fmt.Errorf("event action %q does not accept loss percent", e.Action)
 		}
 
 	case ActionSetLoss:

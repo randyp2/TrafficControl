@@ -22,6 +22,7 @@ const (
 	UpdateSnapshot       UpdateKind = "snapshot"
 	UpdateRateChanged    UpdateKind = "rate_changed"
 	UpdateLatencyChanged UpdateKind = "latency_changed"
+	UpdateJitterChanged  UpdateKind = "jitter_changed"
 	UpdateLossChanged    UpdateKind = "packet_loss_changed"
 	UpdatePaused         UpdateKind = "paused"
 	UpdateResumed        UpdateKind = "resumed"
@@ -36,6 +37,7 @@ type StreamSnapshot struct {
 	Status           StreamStatus
 	TargetRate       int
 	Latency          time.Duration
+	Jitter           time.Duration
 	LossPercent      float64
 	PacketsGenerated uint64
 	PacketsDropped   uint64

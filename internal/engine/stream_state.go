@@ -14,6 +14,7 @@ const (
 type streamState struct {
 	targetRate  int
 	latency     time.Duration
+	jitter      time.Duration
 	lossPercent float64
 	status      streamStatus
 
@@ -33,6 +34,7 @@ func (s streamState) snapshot(name string, capturedAt time.Time) StreamSnapshot 
 		Status:           getStreamStatus(s.status),
 		TargetRate:       s.targetRate,
 		Latency:          s.latency,
+		Jitter:           s.jitter,
 		LossPercent:      s.lossPercent,
 		PacketsGenerated: s.packetsGenerated,
 		PacketsDropped:   s.packetsDropped,

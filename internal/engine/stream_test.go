@@ -270,126 +270,163 @@ func TestLatencyPerformanceSmoke(t *testing.T) {
 		drainMargin    = 250 * time.Millisecond
 	)
 
-	addr, err := net.ResolveUDPAddr("udp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatal(err)
+	tests := []struct {
+		name   string
+		jitter time.Duration
+	}{
+		{name: "baseline"},
+		{name: "jitter", jitter: 100 * time.Millisecond},
 	}
 
-	listener, err := net.ListenUDP("udp", addr)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		_ = listener.Close()
-	})
-
-	var received atomic.Uint64
-	readerDone := make(chan error, 1)
-	go func() {
-		buffer := make([]byte, 1024)
-		for {
-			if _, _, err := listener.ReadFromUDP(buffer); err != nil {
-				if errors.Is(err, net.ErrClosed) {
-					readerDone <- nil
-					return
-				}
-
-				readerDone <- err
-				return
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			addr, err := net.ResolveUDPAddr("udp", "127.0.0.1:0")
+			if err != nil {
+				t.Fatal(err)
 			}
 
-			received.Add(1)
-		}
-	}()
+			listener, err := net.ListenUDP("udp", addr)
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() {
+				_ = listener.Close()
+			})
 
-	stream := scenario.Stream{
-		Name:     "latency-performance",
-		Protocol: scenario.ProtocolUDP,
-		Target:   listener.LocalAddr().String(),
-		Rate:     initialRate,
-		Payload:  "benchmark",
-	}
+			var received atomic.Uint64
+			readerDone := make(chan error, 1)
+			go func() {
+				buffer := make([]byte, 1024)
+				for {
+					if _, _, err := listener.ReadFromUDP(buffer); err != nil {
+						if errors.Is(err, net.ErrClosed) {
+							readerDone <- nil
+							return
+						}
 
-	reporter := &channelReporter{
-		updates: make(chan StreamUpdate, 16),
-	}
-	events := make(chan scenario.Event, 3)
-	events <- scenario.Event{
-		Action:  scenario.ActionSetLatency,
-		Latency: latency,
-	}
-	events <- scenario.Event{
-		Action: scenario.ActionSetRate,
-		Rate:   targetRate,
-	}
+						readerDone <- err
+						return
+					}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+					received.Add(1)
+				}
+			}()
 
-	done := make(chan error, 1)
-	go func() {
-		done <- RunStream(ctx, stream, events, reporter, nil, nil)
-	}()
+			stream := scenario.Stream{
+				Name:     "latency-performance",
+				Protocol: scenario.ProtocolUDP,
+				Target:   listener.LocalAddr().String(),
+				Rate:     initialRate,
+				Payload:  "benchmark",
+				Seed:     42,
+			}
 
-	waitForUpdate(t, reporter.updates, UpdateStarted)
-	waitForUpdate(t, reporter.updates, UpdateLatencyChanged)
-	rateChanged := waitForUpdate(t, reporter.updates, UpdateRateChanged)
+			reporter := &channelReporter{
+				updates: make(chan StreamUpdate, 16),
+			}
+			events := make(chan scenario.Event, 4)
+			events <- scenario.Event{
+				Action:  scenario.ActionSetLatency,
+				Latency: latency,
+			}
+			if tt.jitter > 0 {
+				events <- scenario.Event{
+					Action: scenario.ActionSetJitter,
+					Jitter: tt.jitter,
+				}
+			}
+			events <- scenario.Event{
+				Action: scenario.ActionSetRate,
+				Rate:   targetRate,
+			}
 
-	time.Sleep(activeDuration)
-	events <- scenario.Event{Action: scenario.ActionPause}
-	paused := waitForUpdate(t, reporter.updates, UpdatePaused)
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
 
-	time.Sleep(latency + drainMargin)
-	events <- scenario.Event{Action: scenario.ActionStop}
-	stopped := waitForUpdate(t, reporter.updates, UpdateStopped)
+			done := make(chan error, 1)
+			go func() {
+				done <- RunStream(ctx, stream, events, reporter, nil, nil)
+			}()
 
-	select {
-	case err := <-done:
-		if err != nil {
-			t.Fatalf("RunStream returned error: %v", err)
-		}
-	case <-time.After(time.Second):
-		t.Fatal("RunStream did not stop after stop event")
-	}
+			waitForUpdate(t, reporter.updates, UpdateStarted)
+			waitForUpdate(t, reporter.updates, UpdateLatencyChanged)
+			if tt.jitter > 0 {
+				waitForUpdate(t, reporter.updates, UpdateJitterChanged)
+			}
+			rateChanged := waitForUpdate(t, reporter.updates, UpdateRateChanged)
 
-	sent := stopped.Snapshot.PacketsSent
-	receiveDeadline := time.Now().Add(time.Second)
-	for received.Load() < sent && time.Now().Before(receiveDeadline) {
-		time.Sleep(time.Millisecond)
-	}
+			time.Sleep(activeDuration)
+			events <- scenario.Event{Action: scenario.ActionPause}
+			paused := waitForUpdate(t, reporter.updates, UpdatePaused)
 
-	if err := listener.Close(); err != nil {
-		t.Fatal(err)
-	}
-	if err := <-readerDone; err != nil {
-		t.Fatalf("read UDP packet: %v", err)
-	}
+			// Pause generation first so queued packets can drain before stop discards them.
+			time.Sleep(latency + tt.jitter + drainMargin)
+			events <- scenario.Event{Action: scenario.ActionStop}
+			stopped := waitForUpdate(t, reporter.updates, UpdateStopped)
 
-	actualDuration := paused.Snapshot.CapturedAt.Sub(
-		rateChanged.Snapshot.CapturedAt,
-	)
-	expected := uint64(math.Round(float64(targetRate) * actualDuration.Seconds()))
-	receivedPackets := received.Load()
-	pacingError := math.Abs(float64(sent)-float64(expected)) / float64(expected) * 100
-	delivery := float64(receivedPackets) / float64(sent) * 100
+			select {
+			case err := <-done:
+				if err != nil {
+					t.Fatalf("RunStream returned error: %v", err)
+				}
+			case <-time.After(time.Second):
+				t.Fatal("RunStream did not stop after stop event")
+			}
 
-	t.Logf(
-		"target=%d packets/s latency=%s active_duration=%s expected=%d sent=%d received=%d pacing_error=%.4f%% delivery=%.4f%%",
-		targetRate,
-		latency,
-		actualDuration.Round(time.Millisecond),
-		expected,
-		sent,
-		receivedPackets,
-		pacingError,
-		delivery,
-	)
+			sent := stopped.Snapshot.PacketsSent
+			receiveDeadline := time.Now().Add(time.Second)
+			for received.Load() < sent && time.Now().Before(receiveDeadline) {
+				time.Sleep(time.Millisecond)
+			}
 
-	if pacingError > 2 {
-		t.Fatalf("pacing error %.4f%% exceeds 2%%", pacingError)
-	}
-	if delivery < 99.99 {
-		t.Fatalf("delivery %.4f%% is below 99.99%%", delivery)
+			if err := listener.Close(); err != nil {
+				t.Fatal(err)
+			}
+			if err := <-readerDone; err != nil {
+				t.Fatalf("read UDP packet: %v", err)
+			}
+
+			actualDuration := paused.Snapshot.CapturedAt.Sub(
+				rateChanged.Snapshot.CapturedAt,
+			)
+			expected := uint64(math.Round(float64(targetRate) * actualDuration.Seconds()))
+			generated := stopped.Snapshot.PacketsGenerated
+			receivedPackets := received.Load()
+			if expected == 0 || generated == 0 || sent == 0 {
+				t.Fatalf("expected nonzero traffic: expected=%d generated=%d sent=%d", expected, generated, sent)
+			}
+			pacingError := math.Abs(float64(generated)-float64(expected)) / float64(expected) * 100
+			generatedRate := float64(generated) / actualDuration.Seconds()
+			delivery := float64(receivedPackets) / float64(sent) * 100
+
+			t.Logf(
+				"target=%d packets/s latency=%s jitter=%s active_duration=%s expected=%d generated=%d generated_rate=%.1f packets/s sent=%d received=%d pacing_error=%.4f%% delivery=%.4f%%",
+				targetRate,
+				latency,
+				tt.jitter,
+				actualDuration.Round(time.Millisecond),
+				expected,
+				generated,
+				generatedRate,
+				sent,
+				receivedPackets,
+				pacingError,
+				delivery,
+			)
+
+			if pacingError > 2 {
+				t.Errorf("generation pacing error %.4f%% exceeds 2%%", pacingError)
+			}
+			if dropped := stopped.Snapshot.PacketsDropped; dropped != 0 {
+				t.Errorf("unexpected intentional drops: %d", dropped)
+			}
+			if sent != generated {
+				t.Errorf("queue did not fully drain: generated=%d sent=%d", generated, sent)
+			}
+			if delivery < 99.99 {
+				t.Errorf("delivery %.4f%% is below 99.99%%", delivery)
+			}
+		})
 	}
 }
 

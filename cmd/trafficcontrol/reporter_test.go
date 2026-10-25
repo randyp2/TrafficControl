@@ -16,6 +16,7 @@ func TestConsoleReporterFormatsUpdates(t *testing.T) {
 		Status:           engine.StreamStatusRunning,
 		TargetRate:       25,
 		LossPercent:      50,
+		Jitter:           10 * time.Millisecond,
 		PacketsGenerated: 20,
 		PacketsDropped:   10,
 		PacketsSent:      10,
@@ -44,6 +45,11 @@ func TestConsoleReporterFormatsUpdates(t *testing.T) {
 			name: "rate changed",
 			kind: engine.UpdateRateChanged,
 			want: "   2.00s [RATE_CHANGED: telemetry] target=25 packets/s status=running",
+		},
+		{
+			name: "jitter changed",
+			kind: engine.UpdateJitterChanged,
+			want: "   2.00s [JITTER_CHANGED: telemetry] jitter=+/- 10ms status=running",
 		},
 		{
 			name: "loss changed",

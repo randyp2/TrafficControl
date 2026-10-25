@@ -36,6 +36,7 @@ type Action string
 const (
 	ActionSetRate    Action = "set_rate"
 	ActionSetLatency Action = "set_latency"
+	ActionSetJitter  Action = "set_jitter"
 	ActionSetLoss    Action = "set_loss"
 	ActionStop       Action = "stop"
 	ActionPause      Action = "pause"
@@ -44,10 +45,12 @@ const (
 
 // Event describes a scheduled action for a stream.
 type Event struct {
-	At          time.Duration `yaml:"at"`
-	Stream      string        `yaml:"stream"`
-	Action      Action        `yaml:"action"`
-	Rate        int           `yaml:"rate,omitempty"`
-	Latency     time.Duration `yaml:"latency,omitempty"`
+	At      time.Duration `yaml:"at"`
+	Stream  string        `yaml:"stream"`
+	Action  Action        `yaml:"action"`
+	Rate    int           `yaml:"rate,omitempty"`
+	Latency time.Duration `yaml:"latency,omitempty"`
+	// Jitter is the symmetric variation around the active latency, such as +/-10ms.
+	Jitter      time.Duration `yaml:"jitter,omitempty"`
 	LossPercent float64       `yaml:"loss_percent,omitempty"`
 }
