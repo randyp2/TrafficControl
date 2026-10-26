@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -14,16 +13,29 @@ import (
 	"github.com/randyp2/trafficcontrol/internal/scenario"
 )
 
+const runUsage = "trafficcontrol run [--verbose] <scenario.yaml>"
+
+const runHelp = `Usage: ` + runUsage + `
+
+Load and validate a YAML scenario, then generate its scheduled traffic.
+Flags must appear before the scenario path. Use -- before a path starting with -.
+Stop with Ctrl-C to print a final summary.
+
+Examples:
+  trafficcontrol run examples/scenarios/basic/udp.yaml
+  trafficcontrol run --verbose examples/scenarios/loss/toggle.yaml
+
+Options:`
+
 // runCommand loads a scenario and enables scheduler diagnostics with --verbose.
 func runCommand(args []string) error {
 	flags := flag.NewFlagSet("run", flag.ContinueOnError)
-	flags.SetOutput(os.Stderr)
 	verbose := flags.Bool("verbose", false, "show scheduler diagnostics on stderr")
-	if err := flags.Parse(args); err != nil {
+	if err := parseCommandFlags(flags, args, runHelp); err != nil {
 		return err
 	}
 	if flags.NArg() != 1 {
-		return errors.New("usage: trafficcontrol run [--verbose] <scenario.yaml>")
+		return fmt.Errorf("usage: %s\nflags must appear before the scenario path. See 'trafficcontrol run --help'", runUsage)
 	}
 
 	scenarioPath := flags.Arg(0)

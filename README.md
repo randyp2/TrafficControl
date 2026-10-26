@@ -4,6 +4,17 @@ TrafficControl is a config-driven UDP and TCP traffic generator for exercising s
 
 ## Quick start
 
+Show general help, command help, or the build version:
+
+```bash
+go run ./cmd/trafficcontrol --help
+go run ./cmd/trafficcontrol help run
+go run ./cmd/trafficcontrol listen --help
+go run ./cmd/trafficcontrol --version
+```
+
+Local builds report version `dev`. Help and version output go to stdout and exit successfully; errors go to stderr and exit with code 1. Put command flags before the scenario path. Use `run -- <path>` for filenames starting with `-`.
+
 Start a UDP listener:
 
 ```bash

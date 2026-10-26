@@ -123,13 +123,25 @@ func (r *receiverConsoleReporter) Report(snapshot receiver.Snapshot) {
 	}
 }
 
+const listenUsage = "trafficcontrol listen [--protocol <udp|tcp>] [--address <host:port>]"
+
+const listenHelp = `Usage: ` + listenUsage + `
+
+Receive UDP datagrams or TCP bytes and report rates and totals.
+Stop with Ctrl-C to print a final summary.
+
+Examples:
+  trafficcontrol listen --protocol udp --address 127.0.0.1:5000
+  trafficcontrol listen --protocol tcp --address 127.0.0.1:6000
+
+Options:`
+
 // listenCommand registers a listen subcommand and its respective flags
 func listenCommand(args []string) error {
 	flags := flag.NewFlagSet(
 		"listen",
 		flag.ContinueOnError,
 	)
-	flags.SetOutput(os.Stderr)
 
 	// "--protocol" flag
 	protocol := flags.String(
@@ -145,14 +157,14 @@ func listenCommand(args []string) error {
 		"local address to listen on",
 	)
 
-	if err := flags.Parse(args); err != nil {
+	if err := parseCommandFlags(flags, args, listenHelp); err != nil {
 		return err
 	}
 
 	// --- Usage error
 	if flags.NArg() != 0 {
 		return fmt.Errorf(
-			"usage: trafficcontrol listen --protocol <udp|tcp> --address :5000",
+			"usage: %s\nSee 'trafficcontrol listen --help' for usage.", listenUsage,
 		)
 	}
 
